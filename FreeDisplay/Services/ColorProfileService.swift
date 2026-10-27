@@ -122,17 +122,25 @@ final class ColorProfileService: @unchecked Sendable {
     /// Returns the human-readable color space name for the given display.
     func currentColorSpaceName(for displayID: CGDirectDisplayID) -> String {
         let colorSpace = CGDisplayCopyColorSpace(displayID)
-        guard let cfName = colorSpace.name else { return "未知" }
+        guard let cfName = colorSpace.name else { return "Unknown" }
         return humanReadable(cfName as String)
     }
 
-    /// Returns a description like "内部 (8-bit)" for the display's current color mode.
+    func currentProfileName(for displayID: CGDirectDisplayID) -> String {
+        if let url = currentProfileURL(for: displayID) {
+            return Self.makeProfile(from: url)?.name ?? url.deletingPathExtension().lastPathComponent
+        }
+        let colorSpaceName = currentColorSpaceName(for: displayID)
+        return colorSpaceName == "Unknown" ? "System Default" : colorSpaceName
+    }
+
+    /// Returns a description like "Built-in (8-bit)" for the display's current color mode.
     func colorModeDescription(for displayID: CGDirectDisplayID) -> String {
-        guard let mode = CGDisplayCopyDisplayMode(displayID) else { return "未知" }
+        guard let mode = CGDisplayCopyDisplayMode(displayID) else { return "Unknown" }
         let encoding: String
         if let cfEnc = mode.pixelEncoding { encoding = cfEnc as String } else { encoding = "" }
         let bpc = bitsPerChannel(from: encoding)
-        let source = CGDisplayIsBuiltin(displayID) != 0 ? "内部" : "外部"
+        let source = CGDisplayIsBuiltin(displayID) != 0 ? "Built-in" : "External"
         return "\(source) (\(bpc)-bit)"
     }
 
@@ -166,30 +174,31 @@ final class ColorProfileService: @unchecked Sendable {
         guard let rawUUID = CGDisplayCreateUUIDFromDisplayID(displayID) else { return nil }
         let uuid = rawUUID.takeRetainedValue()
 
-        guard let deviceClass = kColorSyncDisplayDeviceClass?.takeUnretainedValue(),
-              let profileIDKey = kColorSyncDeviceDefaultProfileID?.takeUnretainedValue()
+          guard let deviceClass = kColorSyncDisplayDeviceClass?.takeUnretainedValue(),
+              let factoryProfilesKey = kColorSyncFactoryProfiles?.takeUnretainedValue(),
+              let customProfilesKey = kColorSyncCustomProfiles?.takeUnretainedValue(),
+              let defaultProfileIDKey = kColorSyncDeviceDefaultProfileID?.takeUnretainedValue(),
+              let profileURLKey = kColorSyncDeviceProfileURL?.takeUnretainedValue()
         else { return nil }
 
         guard let rawInfo = ColorSyncDeviceCopyDeviceInfo(deviceClass, uuid) else { return nil }
         let info = rawInfo.takeRetainedValue() as NSDictionary
 
-        // Determine the active mode name from FactoryProfiles[DeviceDefaultProfileID].
-        // Both CustomProfiles and FactoryProfiles use this mode name as their key.
-        let factoryProfiles = info["FactoryProfiles"] as? NSDictionary
-        let activeModeName = factoryProfiles?[profileIDKey] as? String
+          let factoryProfiles = info[factoryProfilesKey] as? NSDictionary
+        guard let defaultProfileID = factoryProfiles?[defaultProfileIDKey] else { return nil }
 
-        // CustomProfiles: keys are mode names, values are NSURL directly.
-        if let modeName = activeModeName,
-           let customProfiles = info["CustomProfiles"] as? NSDictionary,
-           let url = customProfiles[modeName] as? NSURL {
-            return url as URL
+        if let customProfiles = info[customProfilesKey] as? NSDictionary {
+            if let url = customProfiles[defaultProfileID] as? NSURL {
+                return url as URL
+            }
+            if let url = customProfiles[defaultProfileIDKey] as? NSURL {
+                return url as URL
+            }
         }
 
-        // Fall back to FactoryProfiles: the mode entry is a dict with a DeviceProfileURL string.
-        if let modeName = activeModeName,
-           let modeDict = factoryProfiles?[modeName] as? NSDictionary,
-           let urlString = modeDict["DeviceProfileURL"] as? String {
-            return URL(string: urlString)
+          if let factoryProfile = factoryProfiles?[defaultProfileID] as? NSDictionary,
+              let url = factoryProfile[profileURLKey] as? NSURL {
+                return url as URL
         }
 
         return nil
