@@ -1,0 +1,6 @@
+// Default: ad-hoc signing, no team. Override in the gitignored Config/Local.xcconfig.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"

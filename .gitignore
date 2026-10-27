@@ -6,6 +6,10 @@ build/
 DerivedData/
 .build/
 
+# Personal signing identity and team
+Config/Local.xcconfig
+ExportOptions.local.plist
+
 # Local AI agent instructions
 CLAUDE.md
 AGENTS.md

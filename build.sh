@@ -12,6 +12,8 @@ APP_EXPORT_DIR="$PROJECT_ROOT/apps/Release"
 APP_PATH="$APP_EXPORT_DIR/FreeDisplay.app"
 DMG_PATH="$BUILD_DIR/FreeDisplay.dmg"
 APP_VERSION="1.0.1"
+EXPORT_OPTIONS="$PROJECT_ROOT/ExportOptions.plist"
+[ -f "$PROJECT_ROOT/ExportOptions.local.plist" ] && EXPORT_OPTIONS="$PROJECT_ROOT/ExportOptions.local.plist"
 
 build_hash_of() {
     /usr/libexec/PlistBuddy -c 'Print :FDBuildHash' "$1/Contents/Info.plist"
@@ -42,7 +44,7 @@ xcodebuild \
     -exportArchive \
     -archivePath "$ARCHIVE_PATH" \
     -exportPath "$APP_EXPORT_DIR" \
-    -exportOptionsPlist "$PROJECT_ROOT/ExportOptions.plist"
+    -exportOptionsPlist "$EXPORT_OPTIONS"
 echo "Export succeeded."
 
 [ "$(build_hash_of "$APP_PATH")" = "$BUILD_HASH" ] || { echo "Build hash changed during export"; exit 1; }
