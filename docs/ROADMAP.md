@@ -5,8 +5,6 @@
 
 ## 已归档 Phase (0-17)
 
-> 详情见: `docs/roadmap/archive/`
-
 - Phase 0: 项目初始化 ✅
 - Phase 1: 显示器检测与菜单 UI ✅
 - Phase 2: 亮度控制（DDC + 内建） ✅
