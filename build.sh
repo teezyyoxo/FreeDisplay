@@ -3,14 +3,19 @@
 # Usage:  ./build.sh
 # Output: build/FreeDisplay.dmg
 
-set -e
+set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$PROJECT_ROOT/build"
 ARCHIVE_PATH="$BUILD_DIR/FreeDisplay.xcarchive"
-APP_EXPORT_DIR="$BUILD_DIR/export"
+APP_EXPORT_DIR="$PROJECT_ROOT/apps/Release"
 APP_PATH="$APP_EXPORT_DIR/FreeDisplay.app"
 DMG_PATH="$BUILD_DIR/FreeDisplay.dmg"
+APP_VERSION="1.0.1"
+
+build_hash_of() {
+    /usr/libexec/PlistBuddy -c 'Print :FDBuildHash' "$1/Contents/Info.plist"
+}
 
 echo "==> Cleaning build dir…"
 rm -rf "$BUILD_DIR"
@@ -18,19 +23,30 @@ mkdir -p "$BUILD_DIR"
 
 echo "==> Archiving (Release)…"
 xcodebuild \
+    -quiet \
     -scheme FreeDisplay \
     -configuration Release \
     archive \
     -archivePath "$ARCHIVE_PATH" \
-    | grep -E "error:|warning:|Build succeeded|** ARCHIVE"
+    MARKETING_VERSION="$APP_VERSION"
+echo "Archive succeeded."
+
+ARCHIVED_APP="$ARCHIVE_PATH/Products/Applications/FreeDisplay.app"
+BUILD_HASH="$(build_hash_of "$ARCHIVED_APP")"
+echo "Build: v$APP_VERSION ($BUILD_HASH)"
 
 echo "==> Exporting .app…"
+rm -rf "$APP_EXPORT_DIR"
 xcodebuild \
+    -quiet \
     -exportArchive \
     -archivePath "$ARCHIVE_PATH" \
     -exportPath "$APP_EXPORT_DIR" \
-    -exportOptionsPlist "$PROJECT_ROOT/ExportOptions.plist" \
-    | grep -E "error:|Export succeeded"
+    -exportOptionsPlist "$PROJECT_ROOT/ExportOptions.plist"
+echo "Export succeeded."
+
+[ "$(build_hash_of "$APP_PATH")" = "$BUILD_HASH" ] || { echo "Build hash changed during export"; exit 1; }
+codesign --verify --deep --strict "$APP_PATH"
 
 echo "==> Creating DMG…"
 hdiutil create \
@@ -45,4 +61,4 @@ echo "Done! Output:"
 echo "  App: $APP_PATH"
 echo "  DMG: $DMG_PATH"
 echo ""
-echo "Note: App is unsigned. Users must right-click → Open to bypass Gatekeeper."
+echo "Note: App is development-signed but not notarized for public distribution."

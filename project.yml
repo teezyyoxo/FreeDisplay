@@ -13,9 +13,23 @@ targets:
       - path: FreeDisplay
         excludes:
           - "**/*.md"
+    preBuildScripts:
+      - name: Stamp build hash
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(DERIVED_FILE_DIR)/FDBuildStamp.h
+        script: |
+          HASH=$(LC_ALL=C openssl rand -base64 32 | LC_ALL=C tr -dc '[:alnum:]' | cut -c1-7)
+          mkdir -p "$DERIVED_FILE_DIR"
+          printf '#define FD_BUILD_HASH %s\n' "$HASH" > "$DERIVED_FILE_DIR/FDBuildStamp.h"
     settings:
       base:
+        INFOPLIST_FILE: Config/BuildInfo.plist
+        INFOPLIST_PREPROCESS: YES
+        INFOPLIST_PREFIX_HEADER: $(DERIVED_FILE_DIR)/FDBuildStamp.h
         PRODUCT_BUNDLE_IDENTIFIER: com.freedisplay.app
+        MARKETING_VERSION: "1.0.1"
+        INFOPLIST_KEY_CFBundleShortVersionString: "$(MARKETING_VERSION)"
         INFOPLIST_KEY_LSUIElement: true
         INFOPLIST_KEY_NSHumanReadableCopyright: "FreeDisplay - Free & Open Source"
         SWIFT_VERSION: "6.0"
@@ -27,5 +41,4 @@ targets:
         SWIFT_STRICT_CONCURRENCY: minimal
         SWIFT_OBJC_BRIDGING_HEADER: FreeDisplay/FreeDisplay-Bridging-Header.h
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_NSScreenCaptureUsageDescription: "FreeDisplay 需要屏幕录制权限以显示各显示器的实时画面预览。"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
