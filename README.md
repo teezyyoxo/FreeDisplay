@@ -4,7 +4,9 @@
 
 BetterDisplay is a great app, but its best features are locked behind a paid Pro license. FreeDisplay implements the most essential BetterDisplay features as a completely free, open-source macOS menu bar app.
 
-[Download Latest Release](https://github.com/huberdf/FreeDisplay/releases/latest) | [Report an Issue](https://github.com/huberdf/FreeDisplay/issues)
+[Download Latest Release](https://github.com/teezyyoxo/FreeDisplay/releases/latest) | [Report an Issue](https://github.com/teezyyoxo/FreeDisplay/issues)
+
+> **Credit:** FreeDisplay was created by [**huberdf**](https://github.com/huberdf) — see the [original repository](https://github.com/huberdf/FreeDisplay). This is a fork maintained by [teezyyoxo](https://github.com/teezyyoxo) that builds on that work: it adds a redesigned Liquid Glass interface, configurable brightness shortcuts, a Settings window, and a number of fixes. All credit for the original app, its architecture and its DDC/HiDPI groundwork goes to huberdf.
 
 ---
 
@@ -14,7 +16,9 @@ BetterDisplay is a great app, but its best features are locked behind a paid Pro
 |----------------------|:-----------:|-------|
 | DDC Brightness & Contrast | ✅ | Hardware control via IOKit I2C (Intel) / IOAVService (Apple Silicon) |
 | Software Brightness (Gamma) | ✅ | Per-display gamma table control with smooth transitions |
-| Keyboard Brightness Keys for External Displays | ✅ | Intercepts brightness keys when cursor is on external display, shows native macOS OSD |
+| Keyboard Brightness Keys for External Displays | ✅ | Brightness keys adjust the display under the mouse pointer (works with media keys and keyboards that send F14/F15), with the native macOS OSD |
+| Custom Brightness Shortcuts | ✅ | Configurable shortcuts for the primary display, the secondary display, both displays, and "match secondary to primary" |
+| Liquid Glass Interface | ✅ | Glass cards on macOS 26 and later (blur material on earlier versions), with System / Light / Dark appearance |
 | Auto Brightness Sync | ✅ | Syncs external display brightness with built-in display changes |
 | HiDPI Virtual Displays | ✅ | Creates HiDPI dummy displays via CGVirtualDisplay private API |
 | Display Arrangement | ✅ | Position displays (external above built-in, etc.) |
@@ -44,7 +48,7 @@ BetterDisplay is a great app, but its best features are locked behind a paid Pro
 
 ### Option 1: Download DMG
 
-1. Download `FreeDisplay.dmg` from [Releases](https://github.com/huberdf/FreeDisplay/releases/latest)
+1. Download `FreeDisplay.dmg` from [Releases](https://github.com/teezyyoxo/FreeDisplay/releases/latest)
 2. Open the DMG and drag **FreeDisplay.app** to **Applications**
 3. First launch: right-click → **Open** (unsigned app, one-time approval)
 
@@ -52,7 +56,7 @@ BetterDisplay is a great app, but its best features are locked behind a paid Pro
 
 ```bash
 brew install xcodegen
-git clone https://github.com/huberdf/FreeDisplay.git
+git clone https://github.com/teezyyoxo/FreeDisplay.git
 cd FreeDisplay
 xcodegen generate
 xcodebuild -scheme FreeDisplay -configuration Release build
@@ -64,7 +68,10 @@ xcodebuild -scheme FreeDisplay -configuration Release build
 
 | Permission | Why |
 |------------|-----|
-| **Accessibility** | Required for brightness key interception on external displays |
+| **Accessibility** | Required for brightness key and shortcut interception |
+| **Input Monitoring** | Required to see key presses system-wide |
+
+Grant both to FreeDisplay itself. **Settings → Brightness Keys** shows whether each is granted.
 
 No internet connection required (except optional update checks via GitHub Releases API).
 
@@ -87,9 +94,9 @@ No internet connection required (except optional update checks via GitHub Releas
 ```
 FreeDisplay/
 ├── App/              # AppDelegate, app entry point
-├── Models/           # DisplayInfo, DisplayMode, DisplayPreset
+├── Models/           # DisplayInfo, DisplayMode, DisplayPreset, ShortcutBinding
 ├── Services/         # System-level services (DDC, brightness, resolution, gamma, etc.)
-└── Views/            # SwiftUI views for each feature section
+└── Views/            # SwiftUI views: menu panel, Settings window, shared glass design system
 ```
 
 ---
@@ -117,11 +124,12 @@ Issues and PRs welcome. This project uses:
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+The original project's README declares the MIT License, and this fork keeps it. The original repository does not currently include a `LICENSE` file, so see [huberdf/FreeDisplay](https://github.com/huberdf/FreeDisplay) for the author's terms. Original work © huberdf.
 
 ---
 
 ## Acknowledgments
 
+- **[huberdf](https://github.com/huberdf)** — creator of [FreeDisplay](https://github.com/huberdf/FreeDisplay), the project this fork is built on
 - Inspired by [BetterDisplay](https://github.com/waydabber/BetterDisplay), [MonitorControl](https://github.com/MonitorControl/MonitorControl), and [Lunar](https://lunar.fyi/)
 - CGVirtualDisplay bridging header based on [Chromium's virtual_display_mac_util.mm](https://chromium.googlesource.com/chromium/src/+/main/ui/display/mac/test/virtual_display_mac_util.mm)
