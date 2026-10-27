@@ -4,6 +4,7 @@ import SwiftUI
 /// Lists all installed profiles alphabetically; highlights the active one.
 struct ColorProfileView: View {
     @ObservedObject var display: DisplayInfo
+    @Binding var activeProfileName: String
     @State private var profiles: [ICCProfile] = []
     @State private var isLoading: Bool = false
     @State private var selectedPath: URL?
@@ -18,14 +19,14 @@ struct ColorProfileView: View {
                     ProgressView()
                         .scaleEffect(0.65)
                         .frame(width: 14, height: 14)
-                    Text("正在加载描述文件…")
+                    Text("Loading color profiles…")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
             } else if profiles.isEmpty {
-                Text("未找到描述文件")
+                Text("No color profiles found")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 12)
@@ -36,7 +37,7 @@ struct ColorProfileView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
                             .font(.caption)
-                        Text("已应用")
+                        Text("Applied")
                             .font(.caption)
                             .foregroundColor(.green)
                     }
@@ -56,7 +57,7 @@ struct ColorProfileView: View {
                 let rest = otherProfiles
 
                 if !recommended.isEmpty {
-                    SectionBadge(title: "推荐")
+                    SectionBadge(title: "Recommended")
                     ForEach(recommended) { profile in
                         ProfileRow(
                             profile: profile,
@@ -65,12 +66,12 @@ struct ColorProfileView: View {
                             isDisabled: applyingPath != nil,
                             onTap: { applyProfile(profile) }
                         )
-                        .help("切换至此颜色配置文件")
+                        .help("Apply this color profile")
                     }
                 }
 
                 if !rest.isEmpty {
-                    SectionBadge(title: "所有描述文件")
+                    SectionBadge(title: "All Profiles")
                     ForEach(rest) { profile in
                         ProfileRow(
                             profile: profile,
@@ -79,7 +80,7 @@ struct ColorProfileView: View {
                             isDisabled: applyingPath != nil,
                             onTap: { applyProfile(profile) }
                         )
-                        .help("切换至此颜色配置文件")
+                        .help("Apply this color profile")
                     }
                 }
             }
@@ -112,6 +113,7 @@ struct ColorProfileView: View {
         let currentURL = svc.currentProfileURL(for: displayID)
         profiles = loaded
         selectedPath = currentURL
+        activeProfileName = svc.currentProfileName(for: displayID)
         isLoading = false
     }
 
@@ -123,16 +125,30 @@ struct ColorProfileView: View {
         Task { @MainActor in
             applyingPath = profile.path
             defer { applyingPath = nil }
-            let success = ColorProfileService.shared.setProfile(profile, for: display.displayID)
+            let service = ColorProfileService.shared
+            let success = service.setProfile(profile, for: display.displayID)
+            var appliedURL: URL?
             if success {
+                for _ in 0..<10 {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    appliedURL = service.currentProfileURL(for: display.displayID)
+                    if appliedURL?.standardizedFileURL == profile.path.standardizedFileURL { break }
+                }
+            }
+            if appliedURL?.standardizedFileURL == profile.path.standardizedFileURL {
                 selectedPath = profile.path
+                activeProfileName = profile.name
                 applySuccess = true
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
                     applySuccess = false
                 }
             } else {
-                applyError = "应用失败，请重试"
+                selectedPath = appliedURL
+                activeProfileName = service.currentProfileName(for: display.displayID)
+                applyError = success
+                    ? "ColorSync accepted the profile but did not make it active."
+                    : "ColorSync failed to apply this profile. Please try again."
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 3_000_000_000)
                     applyError = nil

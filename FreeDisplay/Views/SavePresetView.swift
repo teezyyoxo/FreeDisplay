@@ -9,19 +9,19 @@ struct SavePresetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Toggle button
-            Button(action: { isShowingSaveForm.toggle() }) {
-                HStack {
-                    Image(systemName: isShowingSaveForm ? "minus.circle.fill" : "plus.circle.fill")
-                        .foregroundColor(.accentColor)
-                    Text(isShowingSaveForm ? "取消" : "保存为预设")
-                        .font(.body)
+            Button(action: { withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { isShowingSaveForm.toggle() } }) {
+                HStack(spacing: 12) {
+                    MenuItemIcon(systemName: isShowingSaveForm ? "xmark" : "plus", color: .green, size: 30)
+                    Text(isShowingSaveForm ? "Cancel" : "Save Current Setup")
+                        .font(.system(.body, design: .rounded, weight: .medium))
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 8)
             .padding(.vertical, 7)
-            .help("将当前显示器配置保存为预设")
+            .help("Save the current display configuration as a preset")
 
             if isShowingSaveForm {
                 SavePresetForm(onSaved: { isShowingSaveForm = false })
@@ -39,38 +39,38 @@ struct SavePresetView: View {
 struct SavePresetForm: View {
     let onSaved: () -> Void
 
-    @State private var presetName: String = "我的预设"
+    @State private var presetName: String = "My Preset"
     @State private var selectedIcon: String = "display"
     @State private var isSaving: Bool = false
     @State private var saveError: String?
 
     private let iconOptions: [(symbol: String, label: String)] = [
-        ("display", "显示器"),
+        ("display", "Display"),
         ("sparkles.rectangle.stack", "HiDPI"),
-        ("rectangle.on.rectangle", "镜像"),
-        ("moon.fill", "夜间"),
-        ("sun.max.fill", "日间"),
-        ("gamecontroller.fill", "游戏"),
-        ("person.fill", "个人"),
-        ("briefcase.fill", "工作"),
+        ("rectangle.on.rectangle", "Mirroring"),
+        ("moon.fill", "Night"),
+        ("sun.max.fill", "Day"),
+        ("gamecontroller.fill", "Gaming"),
+        ("person.fill", "Personal"),
+        ("briefcase.fill", "Work"),
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Name field
             HStack {
-                Text("名称")
+                Text("Name")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(width: 40, alignment: .leading)
-                TextField("预设名称", text: $presetName)
+                TextField("Preset name", text: $presetName)
                     .textFieldStyle(.roundedBorder)
                     .font(.caption)
             }
 
             // Icon picker
             HStack(alignment: .top) {
-                Text("图标")
+                Text("Icon")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(width: 40, alignment: .leading)
@@ -106,7 +106,7 @@ struct SavePresetForm: View {
                             .scaleEffect(0.7)
                             .frame(width: 14, height: 14)
                     }
-                    Text(isSaving ? "保存中..." : "保存")
+                    Text(isSaving ? "Saving..." : "Save")
                         .frame(maxWidth: .infinity)
                 }
             }

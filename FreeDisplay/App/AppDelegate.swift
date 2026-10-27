@@ -8,7 +8,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onWake: (() -> Void)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 防止重复启动：如果已有实例在运行，直接退出
+        // Quit if another instance is already running.
         let runningApps = NSWorkspace.shared.runningApplications.filter {
             $0.bundleIdentifier == Bundle.main.bundleIdentifier
         }
@@ -18,7 +18,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // Start intercepting brightness keys to route them to the display under the cursor.
         BrightnessKeyService.shared.start()
 
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(

@@ -8,6 +8,7 @@ struct ArrangementView: View {
     @State private var draggedID: CGDirectDisplayID?
     @State private var dragOffset: CGSize = .zero
     @State private var dragError: String?
+    @State private var pendingMainDisplay: DisplayInfo?
 
     private let canvasHeight: CGFloat = 160
 
@@ -41,16 +42,8 @@ struct ArrangementView: View {
 
             // "Set as main display" for non-main displays
             ForEach(displayManager.displays.filter { !$0.isMain }) { display in
-                Button(action: {
-                    Task { @MainActor in
-                        let ok = await ArrangementService.shared.setAsMainDisplay(
-                            display.displayID,
-                            among: displayManager.displays
-                        )
-                        if ok { displayManager.refreshDisplays() }
-                    }
-                }) {
-                    Label("设 \(display.name) 为主显示器", systemImage: "star.fill")
+                Button(action: { pendingMainDisplay = display }) {
+                    Label("Set \(display.name) as Main Display", systemImage: "star.fill")
                         .font(.caption)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -59,11 +52,27 @@ struct ArrangementView: View {
                         .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
-                .help("将此显示器设为主显示器")
+                .help("Set this display as the main display")
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
+        .alert(
+            "Make \(pendingMainDisplay?.name ?? "this display") the main display?",
+            isPresented: Binding(get: { pendingMainDisplay != nil }, set: { if !$0 { pendingMainDisplay = nil } })
+        ) {
+            Button("Set as Main Display") {
+                guard let target = pendingMainDisplay else { return }
+                pendingMainDisplay = nil
+                Task { @MainActor in
+                    let ok = await ArrangementService.shared.setAsMainDisplay(target.displayID, among: displayManager.displays)
+                    if ok { displayManager.refreshDisplays() }
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingMainDisplay = nil }
+        } message: {
+            Text("The menu bar and Dock will move to this display.")
+        }
     }
 
     @ViewBuilder
@@ -78,7 +87,7 @@ struct ArrangementView: View {
                     x: rect.midX + (isDragged ? dragOffset.width : 0),
                     y: rect.midY + (isDragged ? dragOffset.height : 0)
                 )
-                .help("显示器：\(display.name)")
+                .help("Display: \(display.name)")
                 .gesture(
                     DragGesture()
                         .onChanged { value in
@@ -163,7 +172,7 @@ struct ArrangementView: View {
                 displayManager.refreshDisplays()
             } else {
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    dragError = "显示器排列失败，请重试"
+                    dragError = "Failed to arrange displays. Please try again."
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                     withAnimation { self.dragError = nil }
@@ -181,7 +190,7 @@ private struct DisplayThumbnailView: View {
 
     var body: some View {
         ZStack {
-            // 背景填充
+            // Background fill
             RoundedRectangle(cornerRadius: 4)
                 .fill(
                     display.isBuiltin
@@ -198,7 +207,7 @@ private struct DisplayThumbnailView: View {
                         )
                 )
 
-            // 外接显示器顶部装饰横条（边框感）
+            // Top bezel strip on external displays
             if !display.isBuiltin {
                 VStack {
                     RoundedRectangle(cornerRadius: 2)
@@ -210,7 +219,7 @@ private struct DisplayThumbnailView: View {
                 .padding(.top, 3)
             }
 
-            // 显示器名称 + 主显示标记
+            // Display name and main-display marker
             VStack(spacing: 2) {
                 Text(display.name)
                     .font(.system(size: 8, weight: .medium))
@@ -221,7 +230,7 @@ private struct DisplayThumbnailView: View {
                     HStack(spacing: 2) {
                         Image(systemName: "star.fill")
                             .font(.system(size: 5))
-                        Text("主")
+                        Text("Main")
                             .font(.system(size: 6))
                     }
                     .foregroundColor(display.isBuiltin ? .white.opacity(0.9) : .blue)

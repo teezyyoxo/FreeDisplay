@@ -23,23 +23,23 @@ struct NotchView: View {
         if notchHeight > 0 {
             VStack(alignment: .leading, spacing: 0) {
                 // Info row
-                HStack {
+                HStack(spacing: 12) {
                     MenuItemIcon(systemName: "camera.aperture", color: .blue)
-                    Text("刘海")
-                        .font(.body)
+                    Text("Notch")
+                        .font(.system(.body, design: .rounded, weight: .medium))
                     Text(String(format: "%.0f pt", notchHeight))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Spacer()
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 8)
                 .padding(.vertical, 7)
 
                 // Hide/show toggle
-                HStack {
-                    MenuItemIcon(systemName: isHidingNotch ? "eye.slash" : "eye", color: .secondary)
-                    Text("隐藏刘海区域")
-                        .font(.body)
+                HStack(spacing: 12) {
+                    MenuItemIcon(systemName: isHidingNotch ? "eye.slash" : "eye", color: .gray)
+                    Text("Hide Notch Area")
+                        .font(.system(.body, design: .rounded, weight: .medium))
                     Spacer()
                     Toggle("", isOn: $isHidingNotch)
                         .toggleStyle(.switch)
@@ -52,11 +52,14 @@ struct NotchView: View {
                                 NotchOverlayManager.shared.hideOverlay(for: display.displayID)
                             }
                         }
-                        .help("在顶部菜单栏区域显示黑色遮罩以隐藏刘海")
+                        .help("Show a black overlay over the menu bar area to hide the notch")
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 8)
                 .padding(.vertical, 7)
-                .background(Color.primary.opacity(isHovered ? 0.06 : 0))
+                .background(
+                    RoundedRectangle(cornerRadius: FD.rowRadius, style: .continuous)
+                        .fill(.primary.opacity(isHovered ? 0.08 : 0))
+                )
                 .onHover { isHovered = $0 }
             }
             .onAppear {

@@ -12,9 +12,11 @@ struct DisplayModeListView: View {
 
     /// Group modes by (resolution + HiDPI), sorted by resolution descending.
     private var resolutionGroups: [ResolutionGroup] {
+        // Orientation-agnostic so portrait displays aren't filtered out.
         let base = display.availableModes.filter {
-            $0.width >= 1280 && $0.height >= 720
+            min($0.width, $0.height) >= 720 && max($0.width, $0.height) >= 1280
         }
+        let nativeArea = display.availableModes.filter { !$0.isHiDPI }.map { $0.width * $0.height }.max() ?? 0
 
         // Group by resolution + HiDPI
         var grouped: [String: [DisplayMode]] = [:]
@@ -29,6 +31,7 @@ struct DisplayModeListView: View {
                 width: sorted[0].width,
                 height: sorted[0].height,
                 isHiDPI: sorted[0].isHiDPI,
+                isNative: !sorted[0].isHiDPI && sorted[0].width * sorted[0].height == nativeArea,
                 modes: sorted
             )
         }
@@ -49,7 +52,7 @@ struct DisplayModeListView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack {
-                Text("显示模式")
+                Text("Available resolutions")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
@@ -59,14 +62,14 @@ struct DisplayModeListView: View {
                         .foregroundColor(.accentColor)
                 }
                 .buttonStyle(.plain)
-                .help("刷新模式列表")
+                .help("Refresh display modes")
             }
             .padding(.horizontal, 12)
             .padding(.top, 6)
             .padding(.bottom, 2)
 
             if resolutionGroups.isEmpty {
-                Text("没有可用的显示模式")
+                Text("No display modes available")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 12)
@@ -90,7 +93,7 @@ struct DisplayModeListView: View {
                         withAnimation(.easeInOut(duration: 0.2)) { showAllModes.toggle() }
                     }) {
                         HStack(spacing: 4) {
-                            Text(showAllModes ? "收起" : "显示全部 \(resolutionGroups.count) 个")
+                            Text(showAllModes ? "Show Less" : "Show All \(resolutionGroups.count)")
                                 .font(.caption)
                                 .foregroundColor(.accentColor)
                             Image(systemName: showAllModes ? "chevron.up" : "chevron.down")
@@ -162,7 +165,7 @@ struct DisplayModeListView: View {
                 errorMessage = nil
             } else {
                 withAnimation {
-                    errorMessage = "无法切换到 \(mode.resolutionString)，请重试"
+                    errorMessage = "Could not switch to \(mode.resolutionString). Please try again."
                 }
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 3_000_000_000)
@@ -181,6 +184,7 @@ private struct ResolutionGroup: Identifiable {
     let width: Int
     let height: Int
     let isHiDPI: Bool
+    let isNative: Bool
     let modes: [DisplayMode] // sorted by refresh rate descending
 
     var id: String { "\(width)x\(height)_\(isHiDPI)" }
@@ -234,8 +238,11 @@ private struct ResolutionRow: View {
                     .foregroundColor(isCurrent ? .primary : .secondary)
                     .monospacedDigit()
 
+                if group.isNative {
+                    FDTag(text: "Native", color: .green)
+                }
                 if group.isHiDPI {
-                    TagBadge(text: "HiDPI", color: .blue)
+                    FDTag(text: "HiDPI", color: .blue)
                 }
 
                 // Show current refresh rate
@@ -247,13 +254,7 @@ private struct ResolutionRow: View {
                 }
 
                 if isCurrent {
-                    Text("当前")
-                        .font(.caption2)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Color.accentColor)
-                        .cornerRadius(4)
+                    FDTag(text: "Current", color: .accentColor)
                 }
 
                 Spacer()
@@ -312,7 +313,7 @@ private struct RefreshRatePicker: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Text("刷新率")
+            Text("Refresh Rate")
                 .font(.caption2)
                 .foregroundColor(.secondary)
 
@@ -366,22 +367,5 @@ private struct RatePill: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-    }
-}
-
-// MARK: - TagBadge
-
-private struct TagBadge: View {
-    let text: String
-    let color: Color
-
-    var body: some View {
-        Text(text)
-            .font(.caption2)
-            .foregroundColor(color)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background(color.opacity(0.12))
-            .cornerRadius(3)
     }
 }

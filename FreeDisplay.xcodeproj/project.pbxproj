@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		07A41793B3F3304722147F19 /* VirtualDisplayService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F606C5D467CD44404890F6EC /* VirtualDisplayService.swift */; };
 		0802EC2814FD3B88A63A337E /* PresetListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76DF3A1CA21D512F8DC936F9 /* PresetListView.swift */; };
+		1491DA05AA8D3C559629C558 /* GlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71E321AAE50F96951D7B8393 /* GlassStyle.swift */; };
 		17F9F1E3464F57FEFF92591C /* DisplayMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87A2686369A9F9969B89376E /* DisplayMode.swift */; };
 		1ACB5C7E928662C408241F63 /* SystemColorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181D9C66D6F3D332AAC9AC0B /* SystemColorView.swift */; };
 		1E5F0FF7497392061D4444CA /* DisplayPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E9756B168F3CBD4A8DA6E3C /* DisplayPreset.swift */; };
@@ -16,11 +17,13 @@
 		1F535E87C3C4F59A5D2AA618 /* AutoBrightnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 598AEDB5733E6B0E108E9EB5 /* AutoBrightnessView.swift */; };
 		20BC0BD119FFB0F3BAC751FD /* DisplayInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E64DDC8BA67C7E60001FDC6 /* DisplayInfo.swift */; };
 		2A82397FAC6CCCA0966AAED5 /* ColorProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C79B61823CE0057EF1E64215 /* ColorProfileView.swift */; };
+		3B88FEE01558A620139F3F67 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9037DBE473FE4512A60F53C /* SettingsWindow.swift */; };
 		3EA5920A3F5338CB1F05642C /* PresetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76FBEDC2A57F5FBBEE11AA0 /* PresetService.swift */; };
 		3EB262F0A45A2A8F1E9FBCE9 /* FreeDisplayApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D732A8A7009C298C78D6895C /* FreeDisplayApp.swift */; };
 		3EE2E724BDB262D96D408A44 /* AutoBrightnessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2D3E618AD92121297F8A33A /* AutoBrightnessService.swift */; };
 		4AA949AC237EE0320969D676 /* DisplayModeListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F049322038220CBB75B6985 /* DisplayModeListView.swift */; };
 		4C8A0C530FDFF72F78F5DFD3 /* BrightnessHUDService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50B61D6248DB61E562B4E3D /* BrightnessHUDService.swift */; };
+		4CD8C44716AD15C335F634EB /* ShortcutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F95730FB4704AD0F3F01D93F /* ShortcutRecorder.swift */; };
 		4E6DA9CD1781AAB2A814E56A /* ArrangementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6804E6622DE956669AE0DBCC /* ArrangementView.swift */; };
 		5E6835D82CA20AB0673F102F /* NotchOverlayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3739D4F9F8A958DE959C133E /* NotchOverlayManager.swift */; };
 		611792FF4019DE0B3D2D8091 /* HiDPIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2CFC4A7F963D418082D6B61 /* HiDPIView.swift */; };
@@ -39,6 +42,7 @@
 		87A763D8B6A6F9D9D9351AB7 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CA0E0202B5E5AC58680DDDB /* MenuBarView.swift */; };
 		8BD7199384F977B50A5EAB5B /* MirrorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 754025E6D6152C81F145C63C /* MirrorService.swift */; };
 		94A44781BBE01DF170DF6F64 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11B24C0698CE807BA1E28D0 /* AppDelegate.swift */; };
+		951D4EFA2E61572559029BA4 /* ShortcutBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 098D84B3BDE774828DC1E793 /* ShortcutBinding.swift */; };
 		B170F04C4FDA2E9A8D0AD6B0 /* BrightnessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6ED9828FF4F2823DDB03014 /* BrightnessService.swift */; };
 		B3452C06010BEFEEBF0FD1FC /* ResolutionSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 603658292A824E3A3968A4D7 /* ResolutionSliderView.swift */; };
 		CBC8B0900A104181893B69B2 /* ImageAdjustmentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F22B3A7EF51E72B078901699 /* ImageAdjustmentView.swift */; };
@@ -54,6 +58,7 @@
 
 /* Begin PBXFileReference section */
 		0509F1D7107310B84B34B825 /* LaunchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchService.swift; sourceTree = "<group>"; };
+		098D84B3BDE774828DC1E793 /* ShortcutBinding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutBinding.swift; sourceTree = "<group>"; };
 		0C8DE3994AD8E543BA765829 /* VirtualDisplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualDisplayView.swift; sourceTree = "<group>"; };
 		181D9C66D6F3D332AAC9AC0B /* SystemColorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemColorView.swift; sourceTree = "<group>"; };
 		1C7E2B33E54A6BAC64A84990 /* DisplayDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayDetailView.swift; sourceTree = "<group>"; };
@@ -74,6 +79,7 @@
 		6E6D1243B91C455CE17BE1DF /* ResolutionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResolutionService.swift; sourceTree = "<group>"; };
 		6F049322038220CBB75B6985 /* DisplayModeListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayModeListView.swift; sourceTree = "<group>"; };
 		719FFBCF3D3A63A6FFFC7172 /* DDCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DDCService.swift; sourceTree = "<group>"; };
+		71E321AAE50F96951D7B8393 /* GlassStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassStyle.swift; sourceTree = "<group>"; };
 		7419D1AC41D1C369FFDCD09D /* GammaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GammaService.swift; sourceTree = "<group>"; };
 		754025E6D6152C81F145C63C /* MirrorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorService.swift; sourceTree = "<group>"; };
 		76DF3A1CA21D512F8DC936F9 /* PresetListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetListView.swift; sourceTree = "<group>"; };
@@ -95,10 +101,12 @@
 		D50B61D6248DB61E562B4E3D /* BrightnessHUDService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrightnessHUDService.swift; sourceTree = "<group>"; };
 		D732A8A7009C298C78D6895C /* FreeDisplayApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FreeDisplayApp.swift; sourceTree = "<group>"; };
 		D76D8EE5271581552ED081AF /* BrightnessSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrightnessSliderView.swift; sourceTree = "<group>"; };
+		D9037DBE473FE4512A60F53C /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
 		DB5BF8AFF876572E97D370A0 /* CGHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGHelpers.swift; sourceTree = "<group>"; };
 		E5483CA367C0673369C00E5A /* SettingsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsService.swift; sourceTree = "<group>"; };
 		F22B3A7EF51E72B078901699 /* ImageAdjustmentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageAdjustmentView.swift; sourceTree = "<group>"; };
 		F606C5D467CD44404890F6EC /* VirtualDisplayService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualDisplayService.swift; sourceTree = "<group>"; };
+		F95730FB4704AD0F3F01D93F /* ShortcutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -160,6 +168,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		88E18A31A9A9A191308CD689 /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				71E321AAE50F96951D7B8393 /* GlassStyle.swift */,
+			);
+			path = Design;
+			sourceTree = "<group>";
+		};
 		A453B875D0FCE891579A1967 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -183,6 +199,7 @@
 				1E64DDC8BA67C7E60001FDC6 /* DisplayInfo.swift */,
 				87A2686369A9F9969B89376E /* DisplayMode.swift */,
 				5E9756B168F3CBD4A8DA6E3C /* DisplayPreset.swift */,
+				098D84B3BDE774828DC1E793 /* ShortcutBinding.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -214,8 +231,19 @@
 				58474F9C406F992241963112 /* SavePresetView.swift */,
 				181D9C66D6F3D332AAC9AC0B /* SystemColorView.swift */,
 				0C8DE3994AD8E543BA765829 /* VirtualDisplayView.swift */,
+				88E18A31A9A9A191308CD689 /* Design */,
+				F09D349FE387F93B630D4DEF /* Settings */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		F09D349FE387F93B630D4DEF /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				D9037DBE473FE4512A60F53C /* SettingsWindow.swift */,
+				F95730FB4704AD0F3F01D93F /* ShortcutRecorder.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -225,6 +253,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = CF716C65C33C5F97EFCE5880 /* Build configuration list for PBXNativeTarget "FreeDisplay" */;
 			buildPhases = (
+				E76BA0FD908201C45938E42A /* Stamp build hash */,
 				D9294EC96F8D1FFD192ED1CC /* Sources */,
 				80C705DA3EF7B7DF82890EF5 /* Resources */,
 			);
@@ -254,7 +283,6 @@
 				};
 			};
 			buildConfigurationList = 8EA410054BD32F42B7BB9BC3 /* Build configuration list for PBXProject "FreeDisplay" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -264,6 +292,7 @@
 			mainGroup = AD8C2B4D7F682DFFA53EF6B7;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 4D2DDE7731949C0697A6167C /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -283,6 +312,29 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		E76BA0FD908201C45938E42A /* Stamp build hash */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp build hash";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/FDBuildStamp.h",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "HASH=$(LC_ALL=C openssl rand -base64 32 | LC_ALL=C tr -dc '[:alnum:]' | cut -c1-7)\nmkdir -p \"$DERIVED_FILE_DIR\"\nprintf '#define FD_BUILD_HASH %s\\n' \"$HASH\" > \"$DERIVED_FILE_DIR/FDBuildStamp.h\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		D9294EC96F8D1FFD192ED1CC /* Sources */ = {
@@ -310,6 +362,7 @@
 				1E5F0FF7497392061D4444CA /* DisplayPreset.swift in Sources */,
 				3EB262F0A45A2A8F1E9FBCE9 /* FreeDisplayApp.swift in Sources */,
 				69413272AA7D6B777D028855 /* GammaService.swift in Sources */,
+				1491DA05AA8D3C559629C558 /* GlassStyle.swift in Sources */,
 				6C8836EDA79FD1DF60809B4A /* HiDPIService.swift in Sources */,
 				611792FF4019DE0B3D2D8091 /* HiDPIView.swift in Sources */,
 				CBC8B0900A104181893B69B2 /* ImageAdjustmentView.swift in Sources */,
@@ -326,6 +379,9 @@
 				B3452C06010BEFEEBF0FD1FC /* ResolutionSliderView.swift in Sources */,
 				F9A1FF13C0CAC41003C5B201 /* SavePresetView.swift in Sources */,
 				E6D99B12980703693C61A687 /* SettingsService.swift in Sources */,
+				3B88FEE01558A620139F3F67 /* SettingsWindow.swift in Sources */,
+				951D4EFA2E61572559029BA4 /* ShortcutBinding.swift in Sources */,
+				4CD8C44716AD15C335F634EB /* ShortcutRecorder.swift in Sources */,
 				1ACB5C7E928662C408241F63 /* SystemColorView.swift in Sources */,
 				63E0F610C2DB27B05C23D665 /* UpdateService.swift in Sources */,
 				07A41793B3F3304722147F19 /* VirtualDisplayService.swift in Sources */,
@@ -403,14 +459,18 @@
 				DEVELOPMENT_TEAM = 29W56PHWJR;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/BuildInfo.plist;
+				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "FreeDisplay - Free & Open Source";
-				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "FreeDisplay 需要屏幕录制权限以显示各显示器的实时画面预览。";
+				INFOPLIST_PREFIX_HEADER = "$(DERIVED_FILE_DIR)/FDBuildStamp.h";
+				INFOPLIST_PREPROCESS = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.freedisplay.app;
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "FreeDisplay/FreeDisplay-Bridging-Header.h";
@@ -430,14 +490,18 @@
 				DEVELOPMENT_TEAM = 29W56PHWJR;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/BuildInfo.plist;
+				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "FreeDisplay - Free & Open Source";
-				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "FreeDisplay 需要屏幕录制权限以显示各显示器的实时画面预览。";
+				INFOPLIST_PREFIX_HEADER = "$(DERIVED_FILE_DIR)/FDBuildStamp.h";
+				INFOPLIST_PREPROCESS = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.freedisplay.app;
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "FreeDisplay/FreeDisplay-Bridging-Header.h";

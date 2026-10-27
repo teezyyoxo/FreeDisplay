@@ -1,66 +1,5 @@
 import SwiftUI
-
-// MARK: - Shared Icon Helper
-
-/// A colored rounded-square SF Symbol icon, consistent with macOS Settings style.
-struct MenuItemIcon: View {
-    let systemName: String
-    var color: Color = .blue
-
-    var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.white)
-            .frame(width: 20, height: 20)
-            .background(RoundedRectangle(cornerRadius: 5).fill(color))
-    }
-}
-
-// MARK: - ExpandableRow
-
-struct ExpandableRow: View {
-    let icon: String
-    var iconColor: Color = .blue
-    let label: String
-    var subtitle: String? = nil
-    @Binding var isExpanded: Bool
-    @State private var isHovered = false
-
-    var body: some View {
-        HStack {
-            MenuItemIcon(systemName: icon, color: iconColor)
-            Text(label).font(.body)
-            Spacer()
-            if let sub = subtitle, !sub.isEmpty {
-                Text(sub)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                .animation(.easeInOut(duration: 0.2), value: isExpanded)
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(Color.primary.opacity(isHovered ? 0.06 : 0))
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                isExpanded.toggle()
-            }
-        }
-        .onHover { isHovered = $0 }
-        .accessibilityLabel(isExpanded ? "\(label)，已展开" : "\(label)，已折叠")
-        .accessibilityHint("点击展开或折叠此部分")
-        .accessibilityAddTraits(.isButton)
-        .help("点击展开或折叠此部分")
-    }
-}
+import AppKit
 
 struct MenuBarView: View {
     @EnvironmentObject var displayManager: DisplayManager
@@ -68,362 +7,234 @@ struct MenuBarView: View {
     @ObservedObject private var settings = SettingsService.shared
     @ObservedObject private var virtualDisplayService = VirtualDisplayService.shared
     @State private var expandedDisplayIDs: Set<CGDirectDisplayID> = []
-    @State private var showArrangement: Bool = false
-    @State private var showVirtualDisplays: Bool = false
-    @State private var showAutoBrightness: Bool = false
-    @State private var showSettings: Bool = false
-    @State private var quitHovered = false
+    @State private var showArrangement = false
+    @State private var showVirtualDisplays = false
+    @State private var showAutoBrightness = false
+    @State private var contentHeight: CGFloat = 0
 
     private var visibleDisplays: [DisplayInfo] {
         displayManager.displays.filter { !virtualDisplayService.isVirtualDisplay($0.displayID) }
     }
 
+    /// Leaves room for the menu bar and the header so the panel never outgrows the screen.
+    private var maxScrollHeight: CGFloat {
+        let pointer = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(pointer) } ?? NSScreen.main
+        return min(820, max(320, (screen?.visibleFrame.height ?? 900) - 170))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                // 显示器列表
-                ForEach(visibleDisplays) { display in
-                    VStack(spacing: 0) {
-                        DisplayRowView(
-                            display: display,
-                            isExpanded: expandedDisplayIDs.contains(display.displayID),
-                            onToggleExpand: {
-                                if expandedDisplayIDs.contains(display.displayID) {
-                                    expandedDisplayIDs.remove(display.displayID)
-                                } else {
-                                    expandedDisplayIDs.insert(display.displayID)
+            header
+
+            ScrollView(.vertical, showsIndicators: false) {
+                FDGlassContainer(spacing: 14) {
+                    VStack(spacing: 14) {
+                        ForEach(visibleDisplays) { display in
+                            DisplayCard(
+                                display: display,
+                                isExpanded: expandedDisplayIDs.contains(display.displayID)
+                            ) {
+                                withAnimation(.spring(response: 0.38, dampingFraction: 0.84)) {
+                                    if expandedDisplayIDs.contains(display.displayID) {
+                                        expandedDisplayIDs.remove(display.displayID)
+                                    } else {
+                                        expandedDisplayIDs.insert(display.displayID)
+                                    }
                                 }
                             }
-                        )
-
-                        if expandedDisplayIDs.contains(display.displayID) {
-                            DisplayDetailView(display: display)
                         }
+
+                        if settings.showCombinedBrightness, visibleDisplays.count > 1 {
+                            FDCard(padding: 12) {
+                                CombinedBrightnessView(displays: displayManager.displays)
+                            }
+                        }
+
+                        presetsSection
+                        toolsSection
+                        updateBanner
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 14)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
                 }
-
-                // 预设列表 (Phase 19)
-                Divider()
-                    .opacity(0.3)
-                    .padding(.vertical, 2)
-
-                PresetListView()
-
-                // 排列显示器 section (Phase 4)
-                if visibleDisplays.count > 1 {
-                    Divider()
-                        .opacity(0.3)
-                        .padding(.vertical, 2)
-
-                    ExpandableRow(
-                        icon: "rectangle.3.offgrid",
-                        iconColor: .blue,
-                        label: "排列显示器",
-                        isExpanded: $showArrangement
-                    )
-
-                    if showArrangement {
-                        ArrangementView()
-                            .environmentObject(displayManager)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-                }
-
-                Divider()
-                    .opacity(0.3)
-                    .padding(.vertical, 2)
-
-                // 组合亮度控制（Phase 2）
-                if settings.showCombinedBrightness {
-                    CombinedBrightnessView(displays: displayManager.displays)
-                    Divider()
-                        .opacity(0.3)
-                        .padding(.vertical, 2)
-                }
-
-                // 工具区标题
-                Text("工具")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                    .padding(.bottom, 2)
-
-                // 虚拟显示器工具入口 (Phase 10)
-                ExpandableRow(
-                    icon: "display.2",
-                    iconColor: .blue,
-                    label: "虚拟显示器",
-                    isExpanded: $showVirtualDisplays
-                )
-
-                if showVirtualDisplays {
-                    VirtualDisplayView()
-                        .padding(.leading, 8)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-
-                // 自动亮度入口 (Phase 11)
-                ExpandableRow(
-                    icon: "sun.and.horizon.fill",
-                    iconColor: .orange,
-                    label: "自动亮度",
-                    isExpanded: $showAutoBrightness
-                )
-
-                if showAutoBrightness {
-                    AutoBrightnessView()
-                        .padding(.leading, 8)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-
-                Divider()
-                    .opacity(0.3)
-                    .padding(.vertical, 2)
-
-                // 设置区 (Phase 12)
-                ExpandableRow(
-                    icon: "gearshape.fill",
-                    iconColor: .gray,
-                    label: "设置",
-                    isExpanded: $showSettings
-                )
-
-                if showSettings {
-                    SettingsView()
-                        .padding(.leading, 8)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-
-                Divider()
-                    .opacity(0.3)
-                    .padding(.vertical, 2)
-
-                // 更新提示 (Phase 12)
-                if updateService.hasUpdate, let ver = updateService.latestVersion {
-                    HStack {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .foregroundColor(.green)
-                            .frame(width: 20)
-                            .accessibilityHidden(true)
-                        Text("新版本 v\(ver) 可用")
-                            .font(.caption)
-                            .foregroundColor(.green)
-                        Spacer()
-                        Button("查看") { updateService.openReleasePage() }
-                            .buttonStyle(.plain)
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                            .help("下载并安装最新版本")
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .background(Color.green.opacity(0.08))
-                    .cornerRadius(6)
-                    .padding(.horizontal, 8)
-                }
-
             }
+            .frame(height: min(max(contentHeight, 140), maxScrollHeight))
         }
-
-        Divider().opacity(0.3)
-
-        // 版本号与退出（固定在底部，不随内容滚动）
-        HStack {
-            Text("FreeDisplay v\(updateService.currentVersion)")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.secondary)
-            Spacer()
-            Button(action: {
-                NSApplication.shared.terminate(nil)
-            }) {
-                HStack(spacing: 3) {
-                    Image(systemName: "xmark")
-                        .accessibilityHidden(true)
-                    Text("退出")
-                }
-                .font(.body)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(quitHovered ? Color.primary.opacity(0.06) : .clear)
-                .cornerRadius(6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .foregroundColor(quitHovered ? .red : .secondary)
-            .onHover { quitHovered = $0 }
-            .help("退出 FreeDisplay")
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-
-        } // end VStack
-        .frame(width: 340)
-        .frame(maxHeight: 700)
-        .padding(.vertical, 8)
+        .frame(width: FD.panelWidth)
+        .background { PanelBackdrop(tint: settings.panelTint, blur: settings.menuBackgroundBlur) }
         .onReceive(displayManager.$displays) { newDisplays in
             let validIDs = Set(newDisplays.map { $0.displayID })
             expandedDisplayIDs = expandedDisplayIDs.intersection(validIDs)
         }
         .task {
-            if settings.checkUpdatesOnLaunch {
-                await updateService.checkForUpdates()
+            if settings.checkUpdatesOnLaunch { await updateService.checkForUpdates() }
+        }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("FreeDisplay")
+                    .font(.system(.title3, design: .rounded, weight: .bold))
+                Text("v\(updateService.currentVersion) (\(updateService.buildHash))")
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            FDGlassContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    FDIconButton(systemName: "gearshape.fill", help: "Settings") { openSettings() }
+                    FDIconButton(systemName: "power", help: "Quit FreeDisplay") { NSApplication.shared.terminate(nil) }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+    }
+
+    private func openSettings() {
+        SettingsWindowController.shared.show()
+    }
+
+    // MARK: - Sections
+
+    private var presetsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            FDSectionHeader(title: "Presets", systemImage: "bookmark.fill")
+            FDCard(padding: 6) { PresetListView() }
+        }
+    }
+
+    private var toolsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            FDSectionHeader(title: "Tools", systemImage: "wrench.and.screwdriver.fill")
+            FDCard(padding: 6) {
+                VStack(alignment: .leading, spacing: 2) {
+                    if visibleDisplays.count > 1 {
+                        ExpandableRow(icon: "rectangle.3.offgrid", iconColor: .blue, label: "Arrange Displays", isExpanded: $showArrangement)
+                        if showArrangement {
+                            ArrangementView()
+                                .environmentObject(displayManager)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
+
+                    ExpandableRow(icon: "display.2", iconColor: .indigo, label: "Virtual Displays", isExpanded: $showVirtualDisplays)
+                    if showVirtualDisplays {
+                        VirtualDisplayView()
+                            .padding(.leading, 6)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+
+                    ExpandableRow(icon: "sun.and.horizon.fill", iconColor: .orange, label: "Auto Brightness", isExpanded: $showAutoBrightness)
+                    if showAutoBrightness {
+                        AutoBrightnessView()
+                            .padding(.leading, 6)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
             }
         }
     }
-}
 
-// MARK: - SettingsView (Phase 12: embedded in MenuBarView)
-
-struct SettingsView: View {
-    @ObservedObject private var settings = SettingsService.shared
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // 开机自启动
-            Toggle(isOn: Binding(
-                get: { settings.launchAtLogin },
-                set: { newValue in
-                    if newValue {
-                        LaunchService.shared.enable()
-                    } else {
-                        LaunchService.shared.disable()
-                    }
-                    settings.launchAtLogin = newValue
-                }
-            )) {
-                HStack(spacing: 6) {
-                    MenuItemIcon(systemName: "power", color: .green)
-                        .accessibilityHidden(true)
-                    Text("开机自动启动")
-                        .font(.body)
-                }
-            }
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            .padding(.horizontal, 12)
-            .help("登录时自动启动 FreeDisplay")
-
-            // 首次启动提示：建议开启开机自启
-            if !settings.launchAtLoginPrompted {
-                HStack(spacing: 6) {
-                    Image(systemName: "info.circle")
-                        .foregroundColor(.secondary)
-                        .frame(width: 16)
-                        .accessibilityHidden(true)
-                    Text("建议开启开机自动启动")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Button("知道了") {
-                        settings.launchAtLoginPrompted = true
-                    }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 2)
-                .onAppear {
-                    // Mark as prompted so it only shows once
-                    // User dismisses manually via "知道了" button
-                }
-            }
-
-            // 显示组合亮度
-            Toggle(isOn: $settings.showCombinedBrightness) {
-                HStack(spacing: 6) {
-                    MenuItemIcon(systemName: "sun.min.fill", color: .yellow)
-                        .accessibilityHidden(true)
-                    Text("显示组合亮度控制")
-                        .font(.body)
-                }
-            }
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            .padding(.horizontal, 12)
-            .help("在菜单栏显示所有显示器的统一亮度滑块")
-
-            // 启动时检查更新
-            Toggle(isOn: $settings.checkUpdatesOnLaunch) {
-                HStack(spacing: 6) {
-                    MenuItemIcon(systemName: "arrow.clockwise.circle", color: .blue)
-                        .accessibilityHidden(true)
-                    Text("启动时检查更新")
-                        .font(.body)
-                }
-            }
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            .padding(.horizontal, 12)
-            .help("每次启动时自动检查是否有新版本可用")
-        }
-        .padding(.vertical, 6)
-    }
-}
-
-// MARK: - DisplayRowView
-
-struct DisplayRowView: View {
-    @ObservedObject var display: DisplayInfo
-    @EnvironmentObject var displayManager: DisplayManager
-    @State private var isHovered: Bool = false
-
-    let isExpanded: Bool
-    let onToggleExpand: () -> Void
-
-    var body: some View {
-        HStack(spacing: 0) {
-            HStack {
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(width: 16)
-                    .rotationEffect(Angle(degrees: isExpanded ? 90 : 0))
-                    .animation(.easeInOut(duration: 0.2), value: isExpanded)
-                    .accessibilityHidden(true)
-
-                MenuItemIcon(systemName: display.isBuiltin ? "laptopcomputer" : "display", color: .blue)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(display.name)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    if let mode = display.currentDisplayMode {
-                        Text(mode.resolutionString)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                if display.isMain {
-                    Text("主屏")
-                        .font(.caption2)
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.blue.opacity(0.12))
-                        .cornerRadius(3)
-                }
+    @ViewBuilder
+    private var updateBanner: some View {
+        if updateService.hasUpdate, let version = updateService.latestVersion {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(.green)
+                Text("Version \(version) is available")
+                    .font(.system(.callout, design: .rounded, weight: .medium))
                 Spacer()
+                Button("View") { updateService.openReleasePage() }
+                    .buttonStyle(.borderless)
+                    .font(.system(.callout, design: .rounded, weight: .semibold))
             }
-            .contentShape(Rectangle())
-            .onTapGesture { onToggleExpand() }
-            .help("展开显示器控制面板")
+            .padding(12)
+            .fdGlass(RoundedRectangle(cornerRadius: FD.rowRadius, style: .continuous), tint: .green.opacity(0.35))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.primary.opacity(isHovered ? 0.06 : 0))
-        .animation(.easeInOut(duration: 0.15), value: isHovered)
-        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Display Card
+
+private struct DisplayCard: View {
+    @ObservedObject var display: DisplayInfo
+    let isExpanded: Bool
+    let toggle: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        FDCard(padding: 0) {
+            VStack(spacing: 0) {
+                VStack(spacing: 14) {
+                    header
+                    BrightnessSliderView(display: display)
+                }
+                .padding(16)
+
+                if isExpanded {
+                    Divider()
+                        .overlay(.primary.opacity(0.08))
+                        .padding(.horizontal, 16)
+                    DisplayDetailView(display: display)
+                        .padding(10)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            MenuItemIcon(
+                systemName: display.isBuiltin ? "laptopcomputer" : "display",
+                color: .blue,
+                size: 40
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(display.name)
+                    .font(.system(.headline, design: .rounded))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if let mode = display.currentDisplayMode {
+                    Text("\(mode.resolutionString) · \(mode.refreshRateString)")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 6)
+
+            HStack(spacing: 5) {
+                if display.isMain { FDTag(text: "Main", color: .blue) }
+                BrightnessModeTag(display: display)
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.tertiary)
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                .accessibilityHidden(true)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: toggle)
+        .help("Show display controls")
         .contextMenu {
             Button {
                 if let url = URL(string: "x-apple.systempreferences:com.apple.Displays-Settings") {
                     NSWorkspace.shared.open(url)
                 }
             } label: {
-                Label("在系统设置中打开", systemImage: "display")
+                Label("Open Displays Settings", systemImage: "display")
             }
 
             Divider()
@@ -432,11 +243,48 @@ struct DisplayRowView: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(display.name, forType: .string)
             } label: {
-                Label("复制显示器名称", systemImage: "doc.on.doc")
+                Label("Copy Display Name", systemImage: "doc.on.doc")
             }
         }
-        .accessibilityLabel("显示器：\(display.name)\(display.isMain ? "，主显示器" : "")\(isExpanded ? "，已展开" : "，已折叠")")
-        .accessibilityHint("点击展开控制面板")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Display: \(display.name)\(display.isMain ? ", main display" : "")\(isExpanded ? ", expanded" : ", collapsed")")
+        .accessibilityHint("Click to show display controls")
         .accessibilityAddTraits(.isButton)
+    }
+}
+
+// MARK: - Backdrop
+
+/// Optional tint behind the glass cards. At 0 the system panel material shows through untouched.
+private struct PanelBackdrop: View {
+    let tint: Double
+    let blur: Double
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
+        ZStack {
+            if #unavailable(macOS 26.0) {
+                PanelVisualEffect(blurStrength: blur).clipShape(shape)
+            }
+            shape.fill(Color(nsColor: .windowBackgroundColor).opacity(tint))
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct PanelVisualEffect: NSViewRepresentable {
+    let blurStrength: Double
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.alphaValue = blurStrength
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+        view.alphaValue = blurStrength
     }
 }

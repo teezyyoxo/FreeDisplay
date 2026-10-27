@@ -7,19 +7,30 @@ struct HiDPIRowView: View {
     @State private var errorMessage: String? = nil
     @State private var isHiDPIOn: Bool = false
 
+    /// macOS only reads display overrides when the display reconnects.
+    private var needsReconnect: Bool {
+        isHiDPIOn && !display.availableModes.contains {
+            $0.isHiDPI && min($0.width, $0.height) >= 720
+        }
+    }
+
     var body: some View {
         if display.isBuiltin {
             EmptyView()
         } else {
-            HStack {
+            HStack(spacing: 12) {
                 MenuItemIcon(systemName: "sparkles", color: .orange)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("HiDPI 模式")
-                        .font(.body)
+                    Text("HiDPI Mode")
+                        .font(.system(.body, design: .rounded, weight: .medium))
                     if !isHiDPIOn {
-                        Text("需要管理员权限")
+                        Text("Administrator privileges required")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                    } else if needsReconnect {
+                        Text("Unplug and replug the display to apply")
+                            .font(.caption)
+                            .foregroundColor(.orange)
                     }
                 }
                 Spacer()
@@ -33,9 +44,12 @@ struct HiDPIRowView: View {
                         .font(.caption)
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 8)
             .padding(.vertical, 7)
-            .background(Color.primary.opacity(isHovered ? 0.06 : 0))
+            .background(
+                RoundedRectangle(cornerRadius: FD.rowRadius, style: .continuous)
+                    .fill(.primary.opacity(isHovered ? 0.08 : 0))
+            )
             .contentShape(Rectangle())
             .onTapGesture {
                 guard !isLoading else { return }
@@ -48,11 +62,11 @@ struct HiDPIRowView: View {
                     product: display.modelNumber
                 )
             }
-            .alert("HiDPI 操作失败", isPresented: Binding(
+            .alert("HiDPI Operation Failed", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) {
-                Button("确定") { errorMessage = nil }
+                Button("OK") { errorMessage = nil }
             } message: {
                 if let msg = errorMessage {
                     Text(msg)
