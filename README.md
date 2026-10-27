@@ -129,7 +129,7 @@ CODE_SIGN_IDENTITY = <your certificate name or SHA-1>
 DEVELOPMENT_TEAM = <your team ID>
 ```
 
-Running `./build.sh` also builds a DMG. It uses `ExportOptions.local.plist` if present, and `ExportOptions.plist` otherwise.
+Running `./build.sh` also builds a DMG, exporting ad-hoc signed by default. A gitignored `ExportOptions.local.plist` overrides the export options.
 
 ---
 

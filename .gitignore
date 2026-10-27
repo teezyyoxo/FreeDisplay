@@ -17,3 +17,7 @@ AGENTS.md
 # Claude settings and built disk images
 .claude/
 *.dmg
+
+# Unused packaging helpers and export options
+/scripts/
+/ExportOptions.plist

@@ -12,8 +12,6 @@ APP_EXPORT_DIR="$PROJECT_ROOT/apps/Release"
 APP_PATH="$APP_EXPORT_DIR/FreeDisplay.app"
 DMG_PATH="$BUILD_DIR/FreeDisplay.dmg"
 APP_VERSION="1.0.1"
-EXPORT_OPTIONS="$PROJECT_ROOT/ExportOptions.plist"
-[ -f "$PROJECT_ROOT/ExportOptions.local.plist" ] && EXPORT_OPTIONS="$PROJECT_ROOT/ExportOptions.local.plist"
 
 build_hash_of() {
     /usr/libexec/PlistBuddy -c 'Print :FDBuildHash' "$1/Contents/Info.plist"
@@ -22,6 +20,29 @@ build_hash_of() {
 echo "==> Cleaning build dir…"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
+
+# Ad-hoc export by default; a gitignored ExportOptions.local.plist overrides it.
+EXPORT_OPTIONS="$BUILD_DIR/ExportOptions.plist"
+if [ -f "$PROJECT_ROOT/ExportOptions.local.plist" ]; then
+    EXPORT_OPTIONS="$PROJECT_ROOT/ExportOptions.local.plist"
+else
+    cat > "$EXPORT_OPTIONS" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>mac-application</string>
+    <key>signingStyle</key>
+    <string>manual</string>
+    <key>signingCertificate</key>
+    <string>-</string>
+    <key>stripSwiftSymbols</key>
+    <true/>
+</dict>
+</plist>
+PLIST
+fi
 
 echo "==> Archiving (Release)…"
 xcodebuild \
