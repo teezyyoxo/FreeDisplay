@@ -4,6 +4,36 @@ All notable changes to FreeDisplay are documented here.
 
 ---
 
+## v1.0.1 (2026-10-27)
+
+- Fix menu content sizing so display controls, tools, and settings remain visible.
+- Expand the menu panel and add an adjustable blurred background.
+- Add separate continuous blur-strength and background-opacity controls.
+- Add configurable keyboard brightness routing for the external display under the pointer, including an adjustable per-press step and Accessibility permission status.
+- Fix active ICC profile readback and verify profile changes before showing them as applied.
+- Route brightness keys using the cursor’s containing display and show the last routed display.
+- Make the background slider control transparency and strengthen the independent blur effect.
+- Improve menu spacing, section hierarchy, display-aware sizing, and icon color restraint.
+- Report Accessibility and Input Monitoring requirements for brightness-key routing.
+- Fix a crash when adjusting brightness on a DDC-capable external display from the slider or keyboard; the DDC completion handler was main-actor isolated but ran on the DDC queue.
+- Fix brightness keys falling through to macOS, which only adjusted the primary display, when the pointer was on a DDC display; the crash above killed the key handler.
+- Enlarge menu icons.
+- Adopt Liquid Glass on macOS 26 and later, keeping the blur background on earlier releases.
+- Add a System/Light/Dark appearance selector to Settings.
+- Return intercepted key events unretained from the event tap to stop leaking them.
+- Handle keyboards that send brightness as F14/F15 key presses instead of media-key events, which is why brightness keys never reached the display under the pointer.
+- Build HiDPI overrides from the panel's unrotated orientation so rotated displays get usable HiDPI modes, and write each override through a unique temp file.
+- Fix the display mode list being empty on portrait displays, tag each resolution Native or HiDPI, and tell the user when a HiDPI override needs the display reconnected.
+- Remove the built-in Native/HiDPI preset toggle; only user-saved presets remain.
+- Ask for confirmation before making a display the main display.
+- Add configurable shortcuts for brightness on the primary display, the secondary display, both displays, and a sync that matches the secondary to the primary. They override pointer-based control and are set in Settings.
+- Redesign the menu panel with Liquid Glass cards, per-display brightness on each card, tinted glass icons, and a continuous glass slider.
+- Move settings into their own window with General, Brightness Keys, Shortcuts, Appearance, and About pages.
+- Stamp a new random build hash into every build, including Debug, so the version always shows a hash instead of "DEV".
+- Display a unique seven-character build identifier next to the app version.
+- Translate user-facing app text to English.
+- Translate remaining Chinese comments in the source and remove the unused screen-recording permission string.
+
 ## v1.0.0 (2026-03-05)
 
 Initial public release — full-featured BetterDisplay alternative.
