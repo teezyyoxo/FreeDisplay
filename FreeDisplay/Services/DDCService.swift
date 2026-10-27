@@ -623,7 +623,7 @@ final class DDCService: ObservableObject, @unchecked Sendable {
         displayID: CGDirectDisplayID,
         command: UInt8,
         value: UInt16,
-        completion: ((Bool) -> Void)? = nil
+        completion: (@Sendable (Bool) -> Void)? = nil
     ) {
         ddcQueue.async {
             for attempt in 0..<3 {
@@ -646,7 +646,7 @@ final class DDCService: ObservableObject, @unchecked Sendable {
     func readAsync(
         displayID: CGDirectDisplayID,
         command: UInt8,
-        completion: @escaping ((current: UInt16, max: UInt16)?) -> Void
+        completion: @escaping @Sendable ((current: UInt16, max: UInt16)?) -> Void
     ) {
         // Fast path: return cached value if still fresh
         cacheLock.lock()
