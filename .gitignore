@@ -13,3 +13,7 @@ ExportOptions.local.plist
 # Local AI agent instructions
 CLAUDE.md
 AGENTS.md
+
+# Claude settings and built disk images
+.claude/
+*.dmg
