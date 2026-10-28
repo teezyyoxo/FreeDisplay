@@ -38,9 +38,11 @@ final class PermissionMonitor: ObservableObject {
     func start() {
         refresh()
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 1.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     func stop() {
@@ -165,7 +167,7 @@ private struct BrightnessKeysSettingsPage: View {
         Form {
             Section {
                 Toggle("Adjust the display under the pointer", isOn: $settings.brightnessKeyRouting)
-                LabeledContent("Change per key press") {
+                LabeledContent("Native change per key press") {
                     HStack {
                         Slider(value: $settings.brightnessKeyStep, in: 1...20)
                             .frame(width: 180)
@@ -178,7 +180,7 @@ private struct BrightnessKeysSettingsPage: View {
             } header: {
                 Text("Brightness Keys")
             } footer: {
-                Text("The brightness keys change whichever display the mouse pointer is on. Use Shortcuts to target a specific display instead.")
+                Text("The brightness keys change whichever display the mouse pointer is on. The increment applies through 100%; HDR uses three steps at 110%, 120%, and 130%. Use Shortcuts to target a specific display instead.")
             }
 
             Section {
@@ -208,12 +210,17 @@ private struct BrightnessKeysSettingsPage: View {
                           systemImage: keyService.isActive ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(keyService.isActive ? .green : .orange)
                 }
+                LabeledContent("Brightness events received", value: "\(keyService.receivedKeyCount)")
+                if let key = keyService.lastReceivedKey {
+                    LabeledContent("Last input", value: key)
+                }
                 if let detected = keyService.lastKeyEventDisplayName {
                     LabeledContent("Last key press on", value: detected)
                 }
                 if let action = keyService.lastActionDescription {
                     LabeledContent("Last action", value: action)
                 }
+                Button("Restart keyboard monitor") { keyService.restart() }
             }
         }
         .onAppear { permissions.start() }

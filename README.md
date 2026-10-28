@@ -71,7 +71,8 @@
 
 - **Hardware brightness and contrast (DDC/CI)** for external displays, over IOKit I2C on Intel and IOAVService on Apple Silicon.
 - **Software brightness** through per-display gamma tables, with smooth transitions.
-- **Brightness keys for external displays.** The keys adjust the display under the mouse pointer, with the native macOS on-screen indicator. They work with media keys and with keyboards that send F14 and F15.
+- **HDR / XDR extra brightness** enabled by default on compatible displays, with three steps at **110%, 120%, and 130%** and an optional per-display opt-out. See [HDR brightness](docs/hdr-brightness.md).
+- **Brightness keys for external displays.** The keys adjust the display under the mouse pointer. FreeDisplay's HUD shows the display, percentage, and HDR step count. Media keys and keyboards that send F14 and F15 are supported.
 - **Custom shortcuts** for the primary display, the secondary display, both displays, and "match secondary to primary".
 - **Auto brightness** that follows the built-in display's brightness.
 
@@ -98,7 +99,6 @@
 
 - Screen streaming and picture-in-picture
 - EDID override, which requires SIP to be disabled
-- XDR and HDR extra brightness, which requires specific hardware
 
 ---
 
@@ -106,7 +106,7 @@
 
 ### Download
 
-1. Download `FreeDisplay-v1.0.1.zip` from [Releases](https://github.com/teezyyoxo/FreeDisplay/releases/latest).
+1. Download the latest FreeDisplay ZIP from [Releases](https://github.com/teezyyoxo/FreeDisplay/releases/latest).
 2. Unzip it and move **FreeDisplay.app** to **Applications**.
 3. On first launch, right-click the app and choose **Open**. The build is ad-hoc signed and not notarized, so macOS asks for approval once.
 

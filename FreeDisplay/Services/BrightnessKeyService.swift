@@ -29,12 +29,14 @@ private func brightnessKeyEventCallback(
 @MainActor
 final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
     static let shared = BrightnessKeyService()
-    private init() {}
+    private init() { observeSettings() }
 
     // MARK: - Published State
 
     @Published private(set) var isActive = false
     @Published private(set) var eventTapCreationFailed = false
+    @Published private(set) var receivedKeyCount = 0
+    @Published private(set) var lastReceivedKey: String?
     @Published private(set) var lastKeyEventDisplayName: String?
     @Published private(set) var lastActionDescription: String?
 
@@ -44,9 +46,8 @@ final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
     private var runLoopSource: CFRunLoopSource?
     private var selfRetained: Unmanaged<BrightnessKeyService>?
     private var pollTimer: Timer?
-    private var pollRetryCount = 0
+    private var permissionSnapshot: Int?
     private var settingsSubscriptions = Set<AnyCancellable>()
-    private static let maxPollRetries = 15
 
     // Read from the nonisolated tap callback, which only ever runs on the main thread.
     private nonisolated(unsafe) static var shortcutTable: [(code: Int, modifiers: UInt64, action: BrightnessShortcutAction)] = []
@@ -65,7 +66,9 @@ final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
     /// Safe to call repeatedly; an existing tap is kept.
     func start() {
         observeSettings()
-        guard eventTap == nil else { return }
+        startHealthMonitorIfNeeded()
+        if let eventTap, CFMachPortIsValid(eventTap), CGEvent.tapIsEnabled(tap: eventTap) { return }
+        removeTap()
 
         let retained = Unmanaged.passRetained(self)
         selfRetained = retained
@@ -75,6 +78,8 @@ final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
             | CGEventMask(1 << CGEventType.keyUp.rawValue)
 
         guard let tap = CGEvent.tapCreate(
+            // Media/system-defined brightness events enter the login-session stream.
+            // A HID tap can install successfully yet never receive these events.
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
@@ -87,27 +92,38 @@ final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
             isActive = false
             eventTapCreationFailed = true
             Self.log.error("Event tap creation failed; waiting for permission")
-            pollForPermission()
             return
         }
 
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else {
+            CFMachPortInvalidate(tap)
+            retained.release()
+            selfRetained = nil
+            isActive = false
+            eventTapCreationFailed = true
+            return
+        }
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
 
         eventTap = tap
         runLoopSource = source
-        isActive = true
-        eventTapCreationFailed = false
-        Self.log.info("Event tap installed")
+        isActive = CGEvent.tapIsEnabled(tap: tap)
+        eventTapCreationFailed = !isActive
+        Self.log.info("Session event tap installed; enabled=\(self.isActive, privacy: .public)")
     }
 
     func stop() {
         pollTimer?.invalidate()
         pollTimer = nil
-        pollRetryCount = 0
+        permissionSnapshot = nil
+        removeTap()
+    }
+
+    private func removeTap() {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
             if let source = runLoopSource {
                 CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
             }
@@ -150,16 +166,47 @@ final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
             .store(in: &settingsSubscriptions)
     }
 
-    private func pollForPermission() {
-        pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] timer in
-            guard let self else { timer.invalidate(); return }
-            self.pollRetryCount += 1
-            timer.invalidate()
-            self.pollTimer = nil
-            if self.pollRetryCount > Self.maxPollRetries { return }
-            self.start()
+    private func startHealthMonitorIfNeeded() {
+        guard pollTimer == nil else { return }
+        permissionSnapshot = currentPermissionSnapshot
+        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkTapHealth() }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
+    }
+
+    private var currentPermissionSnapshot: Int {
+        (AXIsProcessTrusted() ? 1 : 0) | (CGPreflightListenEventAccess() ? 2 : 0)
+    }
+
+    private func checkTapHealth() {
+        let permissions = currentPermissionSnapshot
+        if permissions != permissionSnapshot {
+            permissionSnapshot = permissions
+            // A port created before a grant change may retain a filtered event mask.
+            removeTap()
+        }
+        guard let eventTap, CFMachPortIsValid(eventTap) else {
+            start()
+            return
+        }
+        if !CGEvent.tapIsEnabled(tap: eventTap) {
+            CGEvent.tapEnable(tap: eventTap, enable: true)
+        }
+        isActive = CGEvent.tapIsEnabled(tap: eventTap)
+        if !isActive { removeTap(); start() }
+    }
+
+    func restart() {
+        removeTap()
+        start()
+    }
+
+    private func recordReceivedKey(_ key: DecodedKey) {
+        receivedKeyCount += 1
+        lastReceivedKey = ShortcutKey.isBrightness(key.code) ? "Brightness key" : "Configured shortcut"
+        Self.log.info("Brightness input received: code=\(key.code, privacy: .public), modifiers=\(key.modifiers, privacy: .public), down=\(key.isDown, privacy: .public)")
     }
 
     // MARK: - Event Handling
@@ -194,14 +241,16 @@ final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
 
         if type.rawValue == CGEventType.tapDisabledByTimeout.rawValue ||
            type.rawValue == CGEventType.tapDisabledByUserInput.rawValue {
-            DispatchQueue.main.async {
-                if let tap = self.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
-            }
+            MainActor.assumeIsolated { self.checkTapHealth() }
             return passThrough
         }
 
         if Self.isRecording { return passThrough }
         guard let key = decode(type: type, event: event) else { return passThrough }
+
+        if ShortcutKey.isBrightness(key.code) || Self.shortcutTable.contains(where: { $0.code == key.code && $0.modifiers == key.modifiers }) {
+            MainActor.assumeIsolated { self.recordReceivedKey(key) }
+        }
 
         // 1. Configured shortcuts override pointer-based routing.
         if let match = Self.shortcutTable.first(where: { $0.code == key.code && $0.modifiers == key.modifiers }) {
@@ -224,7 +273,10 @@ final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
         let displayID = screen.displayID
         let screenName = screen.localizedName
 
-        if CGDisplayIsBuiltin(displayID) != 0 {
+        let routesHDR = MainActor.assumeIsolated {
+            DisplayManagerAccessor.shared.displays.first { $0.displayID == displayID }?.maximumBrightness ?? 100 > 100
+        }
+        if CGDisplayIsBuiltin(displayID) != 0 && !routesHDR {
             Task { @MainActor in self.lastKeyEventDisplayName = screenName }
             return passThrough
         }
@@ -275,16 +327,18 @@ final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
 
     private func adjust(_ displays: [DisplayInfo], by delta: Double) {
         for display in displays {
-            apply(display.brightness + delta, to: [display])
+            let next = BrightnessScale.next(display.brightness, direction: delta,
+                                            nativeStep: abs(delta), maximum: display.maximumBrightness)
+            apply(next, to: [display])
         }
     }
 
     private func apply(_ brightness: Double, to displays: [DisplayInfo]) {
-        let clamped = max(0, min(100, brightness))
         for display in displays {
+            let clamped = max(0, min(display.maximumBrightness, brightness))
             BrightnessService.shared.setBrightnessSmooth(clamped, for: display)
             if let screen = NSScreen.screen(for: display.displayID) {
-                BrightnessHUDService.shared.show(brightness: clamped, on: screen)
+                BrightnessHUDService.shared.show(for: display, on: screen)
             }
         }
     }

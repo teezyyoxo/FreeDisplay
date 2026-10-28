@@ -32,6 +32,7 @@ FreeDisplay/
 │   │   ├── file-tree.md            # 完整带注释目录结构（本文件）
 │   │   └── relationships.md        # 模块关系图 + 服务内部依赖 + 数据流
 │   ├── BLOCKING.md                 # 阻塞问题追踪（开工前必读）
+│   ├── hdr-brightness.md             # HDR/XDR extra brightness: controls, architecture and hardware verification
 │   ├── habits.md                   # 开发偏好与工作习惯记录
 │   ├── lessons.md                  # 踩坑经验与教训
 │   └── ROADMAP.md                  # 总体进度追踪（autopilot 靠此追踪 [x] 标记）
@@ -40,18 +41,22 @@ FreeDisplay/
 │   │   ├── AppDelegate.swift       # NSApplicationDelegate，确保仅在菜单栏显示；改动影响 App 生命周期钩子
 │   │   └── FreeDisplayApp.swift    # @main 入口，创建 DisplayManager 并挂载 MenuBarView；改动影响整个 App 初始化链
 │   ├── Models/                     # 数据模型层（纯数据，无副作用）
+│   │   ├── BrightnessScale.swift          # Shared native/HDR stepping, slider geometry, EDR mapping and legacy-level migration
 │   │   ├── DisplayInfo.swift       # ⚠️ 核心显示器模型，12+ @Published 属性；所有 View/Service 均依赖此类，属性增删需全局 grep 同步
 │   │   ├── DisplayMode.swift       # 单个显示模式（分辨率+刷新率+HiDPI 标志）的值类型；枚举逻辑改动影响分辨率切换和模式列表展示
 │   │   └── DisplayPreset.swift     # 显示器配置预设模型：DisplayPreset（预设）+ DisplayPresetEntry（单显示器快照）；Codable，由 PresetService 持久化
 │   ├── Services/                   # 业务逻辑层，与系统框架直接交互
 │   │   ├── ArrangementService.swift        # 通过 CGDisplayConfiguration 读写显示器位置，支持设为主显示器；setPosition/setAsMainDisplay 已异步化，CG 事务在 CGHelpers.runWithTimeout 内执行；改动影响拖拽排列和主显示器切换
 │   │   ├── AutoBrightnessService.swift     # 读取 IOKit AppleLMUController 环境光传感器，定时轮询映射 lux→亮度；改动影响自动亮度精度和电池消耗
-│   │   ├── BrightnessService.swift         # 统一亮度接口：内建屏用 IODisplayGetFloatParameter，外接屏用 DDC VCP 0x10；改动影响所有亮度读写路径
+│   │   ├── BrightnessKeyService.swift      # Session-stage media/F14/F15 interception, pointer/shortcut routing, persistent health recovery and event diagnostics
+│   │   ├── BrightnessHUDService.swift      # FreeDisplay HUD panels: per-display percentage, native/HDR segments, common-mode dismissal
+│   │   ├── BrightnessService.swift         # 统一亮度接口：内建屏用 IODisplayGetFloatParameter，外接屏用 DDC VCP 0x10；100% 以上委托 HDRBrightnessService，软件调暗统一经 GammaService；滑块/快捷键/预设共用路径
 │   │   ├── CGHelpers.swift                 # 共享 CG 阻塞调用工具：CGHelpers.runWithTimeout(seconds:fallback:operation:) 在后台线程以超时保护运行 WindowServer IPC 阻塞操作；被 ArrangementService、MirrorService、ResolutionService、VirtualDisplayService 使用
 │   │   ├── ColorProfileService.swift       # ICC Profile 枚举（扫描 3 个系统目录）和切换（ColorSync API）；改动影响色彩描述文件列表和切换
 │   │   ├── DDCService.swift                # ⚠️ IOKit I2C DDC/CI 通信核心：IOFramebuffer 查找、VCP 读写、5 秒 TTL 缓存、3 次重试；几乎所有外接显示器功能的底层依赖，改动需极谨慎
 │   │   ├── DisplayManager.swift            # ⚠️ 显示器枚举（CGGetOnlineDisplayList）+ CGDisplay 热插拔回调 + arrangeExternalAboveBuiltin() 自动外接屏定位；@Published displays 被全局注入，改动影响整个显示器列表数据流
 │   │   ├── GammaService.swift              # 软件 Gamma 调整：CGSetDisplayTransferByFormula/Table，支持对比度/增益/色温/量化/反色；所有 gamma/软件亮度写入的唯一入口；改动影响图像调整效果
+│   │   ├── HDRBrightnessService.swift      # Public EDR/Metal multiply overlays, compatible-display default (UUID), three HDR levels, current-headroom mapping, wake/reconnect cleanup
 │   │   ├── HiDPIService.swift              # 写 /Library/Displays/...plist 注入 HiDPI 缩放模式，需管理员权限；改动影响 HiDPI override 生成逻辑
 │   │   ├── LaunchService.swift             # SMAppService 管理开机自启动（macOS 13+）；改动仅影响 Launch at Login 功能
 │   │   ├── MirrorService.swift             # CGDisplayConfiguration 硬件级屏幕镜像的启用/停止；enableMirror/disableMirror 已异步化，CG 事务在 CGHelpers.runWithTimeout 内执行；改动影响镜像功能
@@ -67,7 +72,8 @@ FreeDisplay/
 │   └── Views/                      # SwiftUI 视图层
 │       ├── ArrangementView.swift           # 多显示器拖拽排列画布（内外屏缩略图区分）+ 设为主显示器按钮；依赖 ArrangementService
 │       ├── AutoBrightnessView.swift        # 自动亮度开关 + 灵敏度滑块 + 环境光 lux 显示；依赖 AutoBrightnessService
-│       ├── BrightnessSliderView.swift      # 单显示器亮度滑块（200ms 去抖）+ 全局组合亮度控制；依赖 BrightnessService + DDCService
+│       ├── BrightnessHUDView.swift         # Read-only brightness HUD: native orange bar plus three blue HDR steps
+│       ├── BrightnessSliderView.swift      # 单显示器 + 组合亮度滑块，HDR/XDR 开关、100% 分界、110/120/130 HDR 步进与键盘状态同步；依赖 BrightnessService + HDRBrightnessService
 │       ├── ColorProfileView.swift          # ICC Profile 列表（推荐/全部分组）和切换；依赖 ColorProfileService
 │       ├── DisplayDetailView.swift         # ⚠️ 每显示器展开面板，可折叠 Section 的容器（三组分组）；新增/删除 Section 都要改此文件，且需同步 MenuBarView
 │       ├── DisplayModeListView.swift       # 分辨率模式列表（HiDPI/原生/其他分组）、收藏置顶星标、点击切换；依赖 ResolutionService
@@ -82,6 +88,7 @@ FreeDisplay/
 │       └── SavePresetView.swift            # 保存当前显示器状态为预设；内联表单（名称 + 图标选择器）；调用 PresetService.captureCurrentState + addPreset
 ├── FreeDisplay.xcodeproj/          # Xcode 项目文件（由 xcodegen 生成，不要手动编辑）
 ├── .gitignore                      # Git 忽略规则
+├── tests/                         # BrightnessRegression.swift + run-brightness.sh: real routing/rendering, hardware writes stubbed
 ├── build.sh                        # 快速构建脚本
 ├── CLAUDE.md                       # Claude 上下文入口（项目规则、决策约定）
 └── project.yml                     # xcodegen 配置，改动后必须重新运行 xcodegen generate

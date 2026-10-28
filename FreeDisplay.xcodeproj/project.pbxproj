@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		07A41793B3F3304722147F19 /* VirtualDisplayService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F606C5D467CD44404890F6EC /* VirtualDisplayService.swift */; };
 		0802EC2814FD3B88A63A337E /* PresetListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76DF3A1CA21D512F8DC936F9 /* PresetListView.swift */; };
+		094E085FE28BA2D4D77FF8FC /* BrightnessScale.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E6CC52AD5A38001AD3DC18B /* BrightnessScale.swift */; };
 		1491DA05AA8D3C559629C558 /* GlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71E321AAE50F96951D7B8393 /* GlassStyle.swift */; };
 		17F9F1E3464F57FEFF92591C /* DisplayMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87A2686369A9F9969B89376E /* DisplayMode.swift */; };
 		1ACB5C7E928662C408241F63 /* SystemColorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181D9C66D6F3D332AAC9AC0B /* SystemColorView.swift */; };
@@ -46,8 +47,10 @@
 		B170F04C4FDA2E9A8D0AD6B0 /* BrightnessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6ED9828FF4F2823DDB03014 /* BrightnessService.swift */; };
 		B3452C06010BEFEEBF0FD1FC /* ResolutionSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 603658292A824E3A3968A4D7 /* ResolutionSliderView.swift */; };
 		CBC8B0900A104181893B69B2 /* ImageAdjustmentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F22B3A7EF51E72B078901699 /* ImageAdjustmentView.swift */; };
+		CC25A4E8DFB981FC79D30ACD /* HDRBrightnessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D387AA430931793946C729BA /* HDRBrightnessService.swift */; };
 		CD3C6687C2B23F46A3678E94 /* NotchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2419A06679F0A55C454EF1F /* NotchView.swift */; };
 		D14D979F3149D232244DD701 /* MainDisplayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4720147B44C6328686440A16 /* MainDisplayView.swift */; };
+		DD54240A275EF92588C355E1 /* BrightnessHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AE2A3D108479655715A6BC0 /* BrightnessHUDView.swift */; };
 		DEFA538D0EED4A16A0DC987D /* NSScreenExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59F1FD9EEC72051EBC3473C1 /* NSScreenExtension.swift */; };
 		E061011F318208D7FF94D963 /* CGHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB5BF8AFF876572E97D370A0 /* CGHelpers.swift */; };
 		E201AC4CE5BCEC009C926206 /* ArrangementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22030BFC8A680A596A5764C9 /* ArrangementService.swift */; };
@@ -86,6 +89,8 @@
 		76DF3A1CA21D512F8DC936F9 /* PresetListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetListView.swift; sourceTree = "<group>"; };
 		819474C0E46B105CBBFE7A7F /* HiDPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HiDPIService.swift; sourceTree = "<group>"; };
 		87A2686369A9F9969B89376E /* DisplayMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayMode.swift; sourceTree = "<group>"; };
+		8AE2A3D108479655715A6BC0 /* BrightnessHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrightnessHUDView.swift; sourceTree = "<group>"; };
+		8E6CC52AD5A38001AD3DC18B /* BrightnessScale.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrightnessScale.swift; sourceTree = "<group>"; };
 		90F55D10A5241A8DFA941E4C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2D3E618AD92121297F8A33A /* AutoBrightnessService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoBrightnessService.swift; sourceTree = "<group>"; };
 		AED959D5249F419ADBDBA1F4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -99,6 +104,7 @@
 		C8919AFF5445E0571C06B148 /* DisplayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayManager.swift; sourceTree = "<group>"; };
 		CA9AF9F043E5F5A61312476D /* FreeDisplay-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "FreeDisplay-Bridging-Header.h"; sourceTree = "<group>"; };
 		D2CFC4A7F963D418082D6B61 /* HiDPIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HiDPIView.swift; sourceTree = "<group>"; };
+		D387AA430931793946C729BA /* HDRBrightnessService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HDRBrightnessService.swift; sourceTree = "<group>"; };
 		D50B61D6248DB61E562B4E3D /* BrightnessHUDService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrightnessHUDService.swift; sourceTree = "<group>"; };
 		D732A8A7009C298C78D6895C /* FreeDisplayApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FreeDisplayApp.swift; sourceTree = "<group>"; };
 		D76D8EE5271581552ED081AF /* BrightnessSliderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrightnessSliderView.swift; sourceTree = "<group>"; };
@@ -156,6 +162,7 @@
 				719FFBCF3D3A63A6FFFC7172 /* DDCService.swift */,
 				C8919AFF5445E0571C06B148 /* DisplayManager.swift */,
 				7419D1AC41D1C369FFDCD09D /* GammaService.swift */,
+				D387AA430931793946C729BA /* HDRBrightnessService.swift */,
 				819474C0E46B105CBBFE7A7F /* HiDPIService.swift */,
 				0509F1D7107310B84B34B825 /* LaunchService.swift */,
 				754025E6D6152C81F145C63C /* MirrorService.swift */,
@@ -206,6 +213,7 @@
 		BE57EFE41550D9B9A8CDB54F /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				8E6CC52AD5A38001AD3DC18B /* BrightnessScale.swift */,
 				1E64DDC8BA67C7E60001FDC6 /* DisplayInfo.swift */,
 				87A2686369A9F9969B89376E /* DisplayMode.swift */,
 				5E9756B168F3CBD4A8DA6E3C /* DisplayPreset.swift */,
@@ -227,6 +235,7 @@
 			children = (
 				6804E6622DE956669AE0DBCC /* ArrangementView.swift */,
 				598AEDB5733E6B0E108E9EB5 /* AutoBrightnessView.swift */,
+				8AE2A3D108479655715A6BC0 /* BrightnessHUDView.swift */,
 				D76D8EE5271581552ED081AF /* BrightnessSliderView.swift */,
 				C79B61823CE0057EF1E64215 /* ColorProfileView.swift */,
 				1C7E2B33E54A6BAC64A84990 /* DisplayDetailView.swift */,
@@ -358,7 +367,9 @@
 				3EE2E724BDB262D96D408A44 /* AutoBrightnessService.swift in Sources */,
 				1F535E87C3C4F59A5D2AA618 /* AutoBrightnessView.swift in Sources */,
 				4C8A0C530FDFF72F78F5DFD3 /* BrightnessHUDService.swift in Sources */,
+				DD54240A275EF92588C355E1 /* BrightnessHUDView.swift in Sources */,
 				6466CE97516641EB74357A6A /* BrightnessKeyService.swift in Sources */,
+				094E085FE28BA2D4D77FF8FC /* BrightnessScale.swift in Sources */,
 				B170F04C4FDA2E9A8D0AD6B0 /* BrightnessService.swift in Sources */,
 				FE0FA160B19EA273B4F766CC /* BrightnessSliderView.swift in Sources */,
 				E061011F318208D7FF94D963 /* CGHelpers.swift in Sources */,
@@ -374,6 +385,7 @@
 				3EB262F0A45A2A8F1E9FBCE9 /* FreeDisplayApp.swift in Sources */,
 				69413272AA7D6B777D028855 /* GammaService.swift in Sources */,
 				1491DA05AA8D3C559629C558 /* GlassStyle.swift in Sources */,
+				CC25A4E8DFB981FC79D30ACD /* HDRBrightnessService.swift in Sources */,
 				6C8836EDA79FD1DF60809B4A /* HiDPIService.swift in Sources */,
 				611792FF4019DE0B3D2D8091 /* HiDPIView.swift in Sources */,
 				CBC8B0900A104181893B69B2 /* ImageAdjustmentView.swift in Sources */,
@@ -480,7 +492,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.freedisplay.app;
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "FreeDisplay/FreeDisplay-Bridging-Header.h";
@@ -510,7 +522,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.freedisplay.app;
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "FreeDisplay/FreeDisplay-Bridging-Header.h";

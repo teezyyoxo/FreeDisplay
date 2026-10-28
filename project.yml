@@ -31,7 +31,7 @@ targets:
         INFOPLIST_PREPROCESS: YES
         INFOPLIST_PREFIX_HEADER: $(DERIVED_FILE_DIR)/FDBuildStamp.h
         PRODUCT_BUNDLE_IDENTIFIER: com.freedisplay.app
-        MARKETING_VERSION: "1.0.1"
+        MARKETING_VERSION: "1.0.2"
         INFOPLIST_KEY_CFBundleShortVersionString: "$(MARKETING_VERSION)"
         INFOPLIST_KEY_LSUIElement: true
         INFOPLIST_KEY_NSHumanReadableCopyright: "FreeDisplay - Free & Open Source"

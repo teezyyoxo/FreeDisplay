@@ -157,12 +157,21 @@ struct FDIconButton: View {
 
 // MARK: - Glass Slider
 
+struct SliderValueMapping {
+    let fraction: (Double) -> Double
+    let level: (Double) -> Double
+    let adjusted: (Double, Double) -> Double
+}
+
 /// Continuous capsule slider with a glass knob.
 struct GlassSlider: View {
     @Binding var value: Double
     var range: ClosedRange<Double> = 0...100
     var step: Double? = nil
     var tint: Color = .accentColor
+    var referenceValue: Double? = nil
+    var referenceValues: [Double] = []
+    var valueMapping: SliderValueMapping? = nil
     var onEditingChanged: (Bool) -> Void = { _ in }
 
     @State private var isDragging = false
@@ -171,7 +180,7 @@ struct GlassSlider: View {
         GeometryReader { proxy in
             let height = proxy.size.height
             let travel = max(1, proxy.size.width - height)
-            let fraction = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
+            let fraction = valueMapping?.fraction(value) ?? ((value - range.lowerBound) / (range.upperBound - range.lowerBound))
             let knobX = height / 2 + travel * min(max(fraction, 0), 1)
 
             ZStack(alignment: .leading) {
@@ -182,6 +191,16 @@ struct GlassSlider: View {
                 Capsule()
                     .fill(LinearGradient(colors: [tint.opacity(0.95), tint.opacity(0.65)], startPoint: .leading, endPoint: .trailing))
                     .frame(width: max(height, knobX + height / 2))
+
+                ForEach(referenceValues + (referenceValue.map { [$0] } ?? []), id: \.self) { reference in
+                    let referenceFraction = valueMapping?.fraction(reference) ?? ((reference - range.lowerBound) / (range.upperBound - range.lowerBound))
+                    Capsule()
+                        .fill(.primary.opacity(0.45))
+                        .frame(width: 2, height: reference == 100 ? height - 8 : height - 16)
+                        .offset(x: height / 2 + travel * referenceFraction - 1)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
 
                 Circle()
                     .fill(.white.opacity(0.001))
@@ -202,7 +221,7 @@ struct GlassSlider: View {
                             onEditingChanged(true)
                         }
                         let ratio = min(max((gesture.location.x - height / 2) / travel, 0), 1)
-                        var newValue = range.lowerBound + ratio * (range.upperBound - range.lowerBound)
+                        var newValue = valueMapping?.level(ratio) ?? (range.lowerBound + ratio * (range.upperBound - range.lowerBound))
                         if let step { newValue = (newValue / step).rounded() * step }
                         value = min(max(newValue, range.lowerBound), range.upperBound)
                     }
@@ -218,8 +237,8 @@ struct GlassSlider: View {
         .accessibilityAdjustableAction { direction in
             let delta = (step ?? (range.upperBound - range.lowerBound) / 20)
             switch direction {
-            case .increment: value = min(value + delta, range.upperBound)
-            case .decrement: value = max(value - delta, range.lowerBound)
+            case .increment: value = valueMapping?.adjusted(value, 1) ?? min(value + delta, range.upperBound)
+            case .decrement: value = valueMapping?.adjusted(value, -1) ?? max(value - delta, range.lowerBound)
             @unknown default: break
             }
             onEditingChanged(false)

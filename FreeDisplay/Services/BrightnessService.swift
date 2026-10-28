@@ -11,7 +11,8 @@ private func CGDisplayIOServicePort(_ display: CGDirectDisplayID) -> io_service_
 /// Manages smooth brightness transitions for a single display.
 /// Cancels any in-progress animation when a new one starts, so rapid presses stay responsive.
 /// All methods must be called on the main thread.
-final class BrightnessAnimator: @unchecked Sendable {
+@MainActor
+final class BrightnessAnimator {
     private var timer: Timer?
     private var currentStep: Int = 0
     private var totalSteps: Int = 0
@@ -23,6 +24,7 @@ final class BrightnessAnimator: @unchecked Sendable {
     func cancel() {
         timer?.invalidate()
         timer = nil
+        stepHandler = nil
     }
 
     /// Animate from `from` to `to` over `duration` seconds using `steps` discrete steps.
@@ -51,22 +53,26 @@ final class BrightnessAnimator: @unchecked Sendable {
         stepHandler = handler
         let interval = duration / Double(clampedSteps)
 
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] t in
-            guard let self else { t.invalidate(); return }
-            self.currentStep += 1
-            let progress = Double(self.currentStep) / Double(self.totalSteps)
-            // Ease-out curve: smoother deceleration at the end
-            let eased = 1.0 - pow(1.0 - progress, 2.0)
-            let value = self.startValue + (self.targetValue - self.startValue) * eased
-            let isLast = self.currentStep >= self.totalSteps
-            if isLast {
-                t.invalidate()
-                self.timer = nil
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.currentStep += 1
+                let progress = Double(self.currentStep) / Double(self.totalSteps)
+                // Ease-out curve: smoother deceleration at the end
+                let eased = 1.0 - pow(1.0 - progress, 2.0)
+                let value = self.startValue + (self.targetValue - self.startValue) * eased
+                let isLast = self.currentStep >= self.totalSteps
+                if isLast {
+                    self.timer?.invalidate()
+                    self.timer = nil
+                }
+                // Always pass the exact target on the last step to avoid floating-point drift.
+                self.stepHandler?(isLast ? self.targetValue : value, isLast)
+                if isLast { self.stepHandler = nil }
             }
-            // Always pass the exact target on the last step to avoid floating-point drift.
-            self.stepHandler?(isLast ? self.targetValue : value, isLast)
-            if isLast { self.stepHandler = nil }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 }
 
@@ -82,7 +88,18 @@ final class BrightnessService: @unchecked Sendable {
 
     /// One animator per display. Accessed only on the main thread.
     private var animators: [CGDirectDisplayID: BrightnessAnimator] = [:]
+    @MainActor private var hardwareBrightnessTargets: [CGDirectDisplayID: Double] = [:]
+    @MainActor private var appliedBrightness: [CGDirectDisplayID: Double] = [:]
+    @MainActor private var lastSliderWrite: [CGDirectDisplayID: TimeInterval] = [:]
 
+    @MainActor
+    func invalidateHardwareBrightness(for displayID: CGDirectDisplayID) {
+        hardwareBrightnessTargets.removeValue(forKey: displayID)
+        appliedBrightness.removeValue(forKey: displayID)
+        lastSliderWrite.removeValue(forKey: displayID)
+    }
+
+    @MainActor
     private func animator(for displayID: CGDirectDisplayID) -> BrightnessAnimator {
         if let existing = animators[displayID] { return existing }
         let a = BrightnessAnimator()
@@ -145,6 +162,7 @@ final class BrightnessService: @unchecked Sendable {
 
     @MainActor
     func refreshBrightness(for display: DisplayInfo) async {
+        let previousBrightness = display.brightness
         let isBuiltin = display.isBuiltin
         let displayID = display.displayID
 
@@ -154,7 +172,7 @@ final class BrightnessService: @unchecked Sendable {
                     continuation.resume(returning: self?.getInternalBrightness())
                 }
             }
-            if let b = brightness {
+            if let b = brightness, display.brightness == previousBrightness, display.brightness <= 100 {
                 display.brightness = b
             }
         } else {
@@ -179,7 +197,9 @@ final class BrightnessService: @unchecked Sendable {
                     self.ddcAvailable[displayID] = true
                     self.ddcMaxBrightness[displayID] = result.max
                     self.ddcAvailableLock.unlock()
-                    Task { @MainActor in display.brightness = brightness }
+                    Task { @MainActor in
+                        if display.brightness == previousBrightness, display.brightness <= 100 { display.brightness = brightness }
+                    }
                 } else {
                     // DDC read returned nil; mark unavailable
                     self.ddcAvailableLock.lock()
@@ -194,58 +214,84 @@ final class BrightnessService: @unchecked Sendable {
 
     @MainActor
     func setBrightness(_ brightness: Double, for display: DisplayInfo, isAutoAdjust: Bool = false) async {
-        let clamped = max(0.0, min(100.0, brightness))
-        let isBuiltin = display.isBuiltin
-        let displayID = display.displayID
+        setBrightnessImmediately(brightness, for: display, isAutoAdjust: isAutoAdjust)
+    }
 
-        // Record manual adjust time so auto-brightness can honour the cooldown period.
+    /// Synchronous target updates keep drag bindings and keyboard readback in the same transaction.
+    @MainActor
+    func setBrightnessImmediately(_ brightness: Double, for display: DisplayInfo, isAutoAdjust: Bool = false) {
+        cancelAnimation(for: display.displayID)
+        applyBrightness(brightness, for: display, isAutoAdjust: isAutoAdjust)
+    }
+
+    @MainActor
+    func setBrightnessFromSlider(_ brightness: Double, for display: DisplayInfo, isFinal: Bool = false) {
+        cancelAnimation(for: display.displayID)
+        let now = Date.timeIntervalSinceReferenceDate
+        let needsWrite = isFinal || brightness > 100 || display.brightness > 100
+            || isDDCAvailable(for: display.displayID) != true
+            || now - (lastSliderWrite[display.displayID] ?? 0) >= 0.1
+        if needsWrite { lastSliderWrite[display.displayID] = now }
+        applyBrightness(brightness, for: display, isAutoAdjust: false, writesHardware: needsWrite)
+    }
+
+    @MainActor
+    private func applyBrightness(_ brightness: Double, for display: DisplayInfo, isAutoAdjust: Bool, updatesTarget: Bool = true, writesHardware: Bool = true) {
+        guard brightness.isFinite else { return }
+        let requested = HDRBrightnessService.shared.apply(brightness, for: display)
+        let hardwareBrightness = min(100, requested)
+        let displayID = display.displayID
+        appliedBrightness[displayID] = requested
+        if updatesTarget {
+            display.brightness = requested
+            SettingsService.shared.setBrightness(requested, for: displayID)
+        }
+
         if !isAutoAdjust {
             manualAdjustLock.withLock { lastManualAdjustDate = Date() }
         }
 
-        if isBuiltin {
-            let value = Float(clamped / 100.0)
-            display.brightness = clamped
+        // Remove any old software dimming before entering the extended range.
+        if requested > 100, (currentSoftwareBrightness(for: displayID) ?? 1) < 1 {
+            setSoftwareBrightness(100, for: displayID)
+        }
+        guard writesHardware else { return }
+
+        // Above 100%, only the EDR multiplier changes. Repeated 100% hardware
+        // writes waste I2C traffic and can cause macOS to recalculate HDR headroom.
+        let needsHardwareWrite = requested <= 100 || hardwareBrightnessTargets[displayID] != 100
+        hardwareBrightnessTargets[displayID] = hardwareBrightness
+        guard needsHardwareWrite else { return }
+
+        if display.isBuiltin {
             queue.async { [weak self] in
-                self?.setInternalBrightness(value)
+                self?.setInternalBrightness(Float(hardwareBrightness / 100))
             }
         } else {
-            // Check current DDC availability status
-            let currentStatus: Bool? = ddcAvailableLock.withLock { ddcAvailable[displayID] }
-
-            if currentStatus == false {
-                // DDC known unavailable — go straight to software fallback
-                queue.async { [weak self] in
-                    self?.setSoftwareBrightness(clamped, for: displayID)
+            let status = ddcAvailableLock.withLock { ddcAvailable[displayID] }
+            if status == false {
+                // An already-neutral gamma table needs no write when entering HDR.
+                // Transfer-function changes can reset the screen's EDR state.
+                if requested <= 100 || (currentSoftwareBrightness(for: displayID) ?? 1) < 1 {
+                    setSoftwareBrightness(hardwareBrightness, for: displayID)
                 }
                 return
             }
-
-            // Denormalize percentage to display's native DDC range.
-            // If max is unknown, default to 100 (safe for most monitors).
-            let knownMax: UInt16 = ddcAvailableLock.withLock {
-                ddcMaxBrightness[displayID] ?? 100
-            }
-            let ddcValue = UInt16((clamped / 100.0) * Double(knownMax))
-
-            // Attempt DDC write; if it fails, fall back to gamma table dimming
+            let knownMax = ddcAvailableLock.withLock { ddcMaxBrightness[displayID] ?? 100 }
+            let value = UInt16(hardwareBrightness / 100 * Double(knownMax))
             DDCService.shared.writeAsync(
-                displayID: displayID,
-                command: DDCService.brightnessVCP,
-                value: ddcValue
-            ) { [weak self] success in
+                displayID: displayID, command: DDCService.brightnessVCP, value: value
+            ) { [weak self, weak display] success in
                 guard let self else { return }
-                if success {
-                    self.ddcAvailableLock.withLock { self.ddcAvailable[displayID] = true }
-                } else {
-                    self.ddcAvailableLock.withLock { self.ddcAvailable[displayID] = false }
-                    // Apply gamma-based software brightness as fallback (must be on main thread)
-                    DispatchQueue.main.async { [weak self] in
-                        self?.setSoftwareBrightness(clamped, for: displayID)
+                self.ddcAvailableLock.withLock { self.ddcAvailable[displayID] = success }
+                if !success {
+                    DispatchQueue.main.async {
+                        // Use the latest target: a failed older write must not undo a newer adjustment.
+                        guard let display, display.isOnline else { return }
+                        if display.brightness <= 100 || (self.currentSoftwareBrightness(for: displayID) ?? 1) < 1 {
+                            self.setSoftwareBrightness(min(100, display.brightness), for: displayID)
+                        }
                     }
-                    #if DEBUG
-                    print("[BrightnessService] DDC unavailable for display \(displayID), using software fallback")
-                    #endif
                 }
             }
         }
@@ -253,84 +299,30 @@ final class BrightnessService: @unchecked Sendable {
 
     // MARK: - Smooth Brightness Transitions
 
-    /// Animate brightness from the display's current value to `targetBrightness` smoothly.
-    ///
-    /// - For DDC displays: sends 5 DDC commands spaced ~40ms apart (200ms total).
-    ///   DDC I2C commands are inherently slow (~40–50ms each), so 5 steps at 40ms intervals
-    ///   fills the 200ms window without flooding the bus.
-    /// - For software (gamma) brightness: 8 gamma table updates over 200ms give a visibly
-    ///   smooth fade without perceptible frame drops.
-    /// - For built-in displays: 8 IOKit writes over 200ms mirror the software path.
-    ///
-    /// Cancels any previously running animation for the same display, so rapid key presses
-    /// always feel responsive — the animation re-targets from wherever it currently is.
+    /// Uses the same HDR/hardware/software routing for sliders, shortcuts and presets.
     @MainActor
     func setBrightnessSmooth(
         _ targetBrightness: Double,
         for display: DisplayInfo,
         isAutoAdjust: Bool = false
     ) {
-        let clamped = max(0.0, min(100.0, targetBrightness))
-        let displayID = display.displayID
-        let fromBrightness = display.brightness
-
-        if !isAutoAdjust {
-            manualAdjustLock.withLock { lastManualAdjustDate = Date() }
+        guard targetBrightness.isFinite else { return }
+        let target = BrightnessScale.normalized(targetBrightness, maximum: display.maximumBrightness)
+        let previous = display.brightness
+        // HDR is explicitly stepped, so animation must not create intermediate fake HDR percentages.
+        if target > 100 || previous > 100 {
+            setBrightnessImmediately(target, for: display, isAutoAdjust: isAutoAdjust)
+            return
         }
-
-        let anim = animator(for: displayID)
-
-        if display.isBuiltin {
-            // Built-in: use IOKit — 8 steps over 200ms
-            anim.animate(from: fromBrightness, to: clamped, steps: 8, duration: 0.20) { [weak self, weak display] value, _ in
-                guard let self, let display else { return }
-                display.brightness = value
-                let floatVal = Float(value / 100.0)
-                self.queue.async { self.setInternalBrightness(floatVal) }
-            }
-        } else {
-            let currentStatus: Bool? = ddcAvailableLock.withLock { ddcAvailable[displayID] }
-
-            if currentStatus == false {
-                // Software (gamma) path: 8 steps over 200ms
-                anim.animate(from: fromBrightness, to: clamped, steps: 8, duration: 0.20) { [weak display] value, _ in
-                    display?.brightness = value
-                    BrightnessService.shared.setSoftwareBrightness(value, for: displayID)
-                }
-            } else {
-                // DDC path: 5 steps over 200ms.
-                // DDC I2C is slow (~40-50ms per command), so 5 steps at 40ms intervals
-                // keeps the bus from overloading while giving smooth visible steps.
-                let knownMax: UInt16 = ddcAvailableLock.withLock {
-                    ddcMaxBrightness[displayID] ?? 100
-                }
-                anim.animate(from: fromBrightness, to: clamped, steps: 5, duration: 0.20) { [weak self, weak display] value, isLast in
-                    guard let self else { return }
-                    display?.brightness = value
-                    let ddcValue = UInt16((value / 100.0) * Double(knownMax))
-                    // Only send DDC on intermediate steps and the final step.
-                    // If DDC fails on the final step, fall through to software.
-                    DDCService.shared.writeAsync(
-                        displayID: displayID,
-                        command: DDCService.brightnessVCP,
-                        value: ddcValue
-                    ) { [weak self] success in
-                        guard let self else { return }
-                        if success {
-                            self.ddcAvailableLock.withLock { self.ddcAvailable[displayID] = true }
-                        } else if isLast {
-                            // DDC failed — mark unavailable and apply software fallback
-                            self.ddcAvailableLock.withLock { self.ddcAvailable[displayID] = false }
-                            DispatchQueue.main.async { [weak self] in
-                                self?.setSoftwareBrightness(clamped, for: displayID)
-                            }
-                            #if DEBUG
-                            print("[BrightnessService] smooth DDC failed for \(displayID), using software fallback")
-                            #endif
-                        }
-                    }
-                }
-            }
+        let from = appliedBrightness[display.displayID] ?? previous
+        display.brightness = target
+        SettingsService.shared.setBrightness(target, for: display.displayID)
+        let usesDDC = !display.isBuiltin && isDDCAvailable(for: display.displayID) != false
+        animator(for: display.displayID).animate(
+            from: from, to: target, steps: usesDDC ? 5 : 8, duration: 0.20
+        ) { [weak self, weak display] value, _ in
+            guard let self, let display else { return }
+            self.applyBrightness(value, for: display, isAutoAdjust: isAutoAdjust, updatesTarget: false)
         }
     }
 
@@ -340,51 +332,20 @@ final class BrightnessService: @unchecked Sendable {
     /// Uses a linear ramp from 0 to `factor` so white level is dimmed while black stays black.
     /// brightness: 0–100 (percentage); never goes fully to 0 to avoid a completely black screen.
     ///
-    /// If GammaService has an active adjustment for this display, it delegates to GammaService
-    /// so the two do not overwrite each other's CGSetDisplayTransfer* call.
+    /// Delegates all transfer-table writes to GammaService, preserving image adjustments.
     func setSoftwareBrightness(_ brightness: Double, for displayID: CGDirectDisplayID) {
-        let factor = max(0.05, brightness / 100.0)
+        let factor = max(0.05, min(1, brightness / 100.0))
         softwareBrightnessLock.withLock { softwareBrightnessFactors[displayID] = factor }
         saveSoftwareBrightness(factor: factor, for: displayID)
 
-        // If GammaService has an active adjustment, let it re-apply (it will incorporate the factor).
-        if GammaService.shared.hasActiveAdjustment(for: displayID) {
-            GammaService.shared.reapply(for: displayID)
-            return
-        }
-
-        // No active gamma adjustment — write a plain dimmed ramp directly.
-        let floatFactor = Float(factor)
-        let tableSize: UInt32 = 256
-        var red   = [CGGammaValue](repeating: 0, count: Int(tableSize))
-        var green = [CGGammaValue](repeating: 0, count: Int(tableSize))
-        var blue  = [CGGammaValue](repeating: 0, count: Int(tableSize))
-
-        for i in 0..<Int(tableSize) {
-            let v = CGGammaValue(Float(i) / Float(tableSize - 1) * floatFactor)
-            red[i]   = v
-            green[i] = v
-            blue[i]  = v
-        }
-
-        let result = CGSetDisplayTransferByTable(displayID, tableSize, &red, &green, &blue)
-        #if DEBUG
-        if result != CGError.success {
-            print("[BrightnessService] CGSetDisplayTransferByTable failed: \(result)")
-        } else {
-            print("[BrightnessService] software brightness set to \(Int(brightness))% for display \(displayID)")
-        }
-        #endif
+        GammaService.shared.applySoftwareBrightness(for: displayID)
     }
 
-    /// Resets the gamma table for a display back to the identity curve.
+    /// Removes software dimming while retaining the display's image adjustments.
     func resetSoftwareBrightness(for displayID: CGDirectDisplayID) {
-        let size = 256
-        let values = (0..<size).map { CGGammaValue($0) / CGGammaValue(size - 1) }
-        var red = values
-        var green = values
-        var blue = values
-        CGSetDisplayTransferByTable(displayID, UInt32(size), &red, &green, &blue)
+        _ = softwareBrightnessLock.withLock { softwareBrightnessFactors.removeValue(forKey: displayID) }
+        UserDefaults.standard.removeObject(forKey: softBrightnessKey(for: displayID))
+        GammaService.shared.applySoftwareBrightness(for: displayID)
     }
 
     /// Returns whether DDC is available for the given display.

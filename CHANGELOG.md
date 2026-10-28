@@ -4,6 +4,21 @@ All notable changes to FreeDisplay are documented here.
 
 ---
 
+## v1.0.2 (2026-10-28)
+
+- Enable HDR / XDR brightness by default on compatible displays while preserving explicit per-display opt-outs.
+- Use three HDR control steps at 110%, 120%, and 130%, mapped across the currently available extra brightness, instead of exposing theoretical headroom as a misleading continuous percentage range.
+- Fix HDR activating and showing higher percentages without brightening the desktop: use render-server multiply compositing instead of an in-process Core Image filter object; verify visible improvement against native 100%.
+- Keep sliders, keyboard controls, combined adjustments, and presets on the same scale, with a clear 100% boundary and HDR step markers.
+- Fix slider readback after keyboard changes, rapid key-repeat accumulation, and dragging into HDR; publish targets immediately and prevent late hardware reads from overwriting newer adjustments.
+- Replace the native brightness HUD with a FreeDisplay HUD showing the display name, percentage, normal brightness bar, and three blue HDR steps. Consume handled brightness keys in the login-session event stream before macOS processes them.
+- Keep brightness animation, HDR rendering, and HUD dismissal active while menus and sliders are being tracked.
+- Fix lost physical media-key input caused by using a HID-stage tap; restore live slider/HUD updates, secondary-display shortcuts, and pointer-based brightness routing with a session-stage tap.
+- Recover the keyboard monitor after permission changes or disabled/invalid taps without a fixed retry cutoff; show received brightness-event counts and provide a restart control in Settings.
+- Refresh exported app-bundle timestamps so Finder reflects the newly delivered build instead of an older directory date.
+- Save HDR preferences per display, migrate earlier saved HDR percentages and presets to the stepped scale, and restore the boost after relaunch, reconnect, and wake; remove overlays when disabled, at 100% or below, on disconnect, sleep, and quit.
+- Route software dimming through GammaService to preserve image adjustments, and avoid redundant hardware brightness writes in the HDR range.
+
 ## v1.0.1 (2026-10-27)
 
 - Fix menu content sizing so display controls, tools, and settings remain visible.

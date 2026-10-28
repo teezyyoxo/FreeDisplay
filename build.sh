@@ -11,7 +11,7 @@ ARCHIVE_PATH="$BUILD_DIR/FreeDisplay.xcarchive"
 APP_EXPORT_DIR="$PROJECT_ROOT/apps/Release"
 APP_PATH="$APP_EXPORT_DIR/FreeDisplay.app"
 DMG_PATH="$BUILD_DIR/FreeDisplay.dmg"
-APP_VERSION="1.0.1"
+APP_VERSION="1.0.2"
 
 build_hash_of() {
     /usr/libexec/PlistBuddy -c 'Print :FDBuildHash' "$1/Contents/Info.plist"
@@ -70,6 +70,8 @@ echo "Export succeeded."
 
 [ "$(build_hash_of "$APP_PATH")" = "$BUILD_HASH" ] || { echo "Build hash changed during export"; exit 1; }
 codesign --verify --deep --strict "$APP_PATH"
+# Finder displays the bundle directory's timestamp; export preserves its older date.
+touch "$APP_PATH"
 
 echo "==> Creating DMG…"
 hdiutil create \

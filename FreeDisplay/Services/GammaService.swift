@@ -73,6 +73,16 @@ final class GammaService: @unchecked Sendable {
         applyInternal(adj, for: displayID)
     }
 
+    /// All software-brightness writes, including the plain ramp fallback, enter here.
+    func applySoftwareBrightness(for displayID: CGDirectDisplayID) {
+        let adj = adjustmentsLock.withLock { activeAdjustments[displayID] }
+        if let adj, !adj.isPaused {
+            applyInternal(adj, for: displayID)
+        } else {
+            applyInternal(GammaAdjustment(), for: displayID)
+        }
+    }
+
     // MARK: - Public API
 
     /// Apply a complete GammaAdjustment snapshot to the given display.

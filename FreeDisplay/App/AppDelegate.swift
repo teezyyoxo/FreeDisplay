@@ -34,7 +34,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSWorkspace.shared.notificationCenter.removeObserver(obs)
         }
         BrightnessKeyService.shared.stop()
-        // GammaService already handles CGDisplayRestoreColorSyncSettings via willTerminateNotification observer.
+        BrightnessHUDService.shared.stop()
+        HDRBrightnessService.shared.stop()
+        // GammaService restores each display's transfer table on termination.
         VirtualDisplayService.shared.destroyAll()
     }
 }

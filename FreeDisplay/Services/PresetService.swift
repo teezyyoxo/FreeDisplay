@@ -113,11 +113,14 @@ final class PresetService: ObservableObject, @unchecked Sendable {
                 print("[PresetService]      available: \(display.availableModes.map { "\($0.width)×\($0.height)/\($0.isHiDPI)" }.joined(separator: ", "))")
             }
 
-            // Set brightness if specified (convert 0.0-1.0 to 0-100 range used by BrightnessService)
+            // Convert the saved factor to a percentage; BrightnessService clamps to the enabled range.
             if let brightness = entry.brightness {
                 print("[PresetService]   -> setting brightness \(brightness)")
+                let percentage = brightness * 100
+                let target = entry.brightnessScaleVersion == 2 ? percentage
+                    : BrightnessScale.migratedLegacyLevel(percentage, potentialHeadroom: display.hdrBrightnessHeadroom)
                 await BrightnessService.shared.setBrightness(
-                    brightness * 100.0,
+                    target,
                     for: display,
                     isAutoAdjust: false
                 )
@@ -153,6 +156,7 @@ final class PresetService: ObservableObject, @unchecked Sendable {
                 height: mode?.height ?? display.pixelHeight,
                 isHiDPI: mode?.isHiDPI ?? false,
                 brightness: display.brightness / 100.0,
+                brightnessScaleVersion: 2,
                 arrangementX: display.bounds.origin.x,
                 arrangementY: display.bounds.origin.y
             )

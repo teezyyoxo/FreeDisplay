@@ -7,7 +7,8 @@ struct DisplayPresetEntry: Codable, Identifiable {
     var width: Int
     var height: Int
     var isHiDPI: Bool
-    var brightness: Double?       // optional brightness 0.0-1.0
+    var brightness: Double?       // 0.0-1.0 SDR; higher factors within the enabled HDR range
+    var brightnessScaleVersion: Int? = nil  // nil: legacy EDR percentages; 2: three HDR control steps
     var arrangementX: Double?     // optional position
     var arrangementY: Double?
 }

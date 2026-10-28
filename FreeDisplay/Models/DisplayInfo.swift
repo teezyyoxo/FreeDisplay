@@ -16,6 +16,18 @@ class DisplayInfo: ObservableObject, Identifiable {
     @Published var pixelWidth: Int
     @Published var pixelHeight: Int
     @Published var brightness: Double
+    @Published var hdrBrightnessEnabled = false
+    @Published var hdrBrightnessHeadroom: Double = 1
+    @Published var hdrBrightnessMultiplier: Double = 1
+    @Published var hdrBrightnessError: String?
+
+    var supportsHDRBrightness: Bool { hdrBrightnessHeadroom > 1.05 }
+
+    /// HDR uses three control steps, rather than exposing a theoretical EDR multiplier as a percentage.
+    var maximumBrightness: Double {
+        guard hdrBrightnessEnabled, supportsHDRBrightness else { return 100 }
+        return BrightnessScale.hdrMaximum
+    }
     @Published var availableModes: [DisplayMode]
     @Published var currentDisplayMode: DisplayMode?
     @Published var ddcValues: [UInt8: UInt16?] = [:]

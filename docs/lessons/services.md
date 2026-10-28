@@ -89,3 +89,33 @@
 - **解法**: 创建前先 release 旧 assertion；onDisappear 只在 !preventSleep 时 release（保持开关 ON 时持续生效）
 - **教训**: 系统资源（IOPMAssertion、IO iterator 等）必须严格配对 create/release，覆盖 ID 前先 release 旧的
 - **日期**: 2026-03-04
+
+### L-028: HDR brightness needs potential and current EDR headroom
+- Use `NSScreen.maximumPotentialExtendedDynamicRangeColorComponentValue` for capability detection, not a user-facing percentage limit. Current headroom may be 1 until HDR content is presented.
+- Render floating-point extended-linear content with `CAMetalLayer.wantsExtendedDynamicRangeContent`; clamp the desktop multiplier to `maximumExtendedDynamicRangeColorComponentValue`, refreshed while boosting.
+- Run renderer checks under an actual AppKit event loop. An async command-line main alone does not drive MTKView/Timer rendering and can falsely suggest HDR activation failed.
+- Keep hardware brightness at 100% in the extra range; avoid redundant DDC writes. Software dimming must still go through GammaService, and boost overlays must be removed below/equal to 100%, on disconnect, sleep and quit.
+- Date: 2026-10-28
+
+### L-029: Brightness targets, menu tracking and HDR steps must share one scale
+- Publish the accepted target immediately. Animate physical writes separately so key repeats accumulate correctly and sliders/HUDs never show in-flight values. Guard late hardware readbacks against overwriting newer targets.
+- Use direct slider bindings and flush the final value; an onChange guarded by drag state can miss a release-time change. Throttle only hardware I/O, not model updates or HDR rendering.
+- Main-thread animation, Metal presentation, permission retry and HUD-dismissal timers must run in common modes. Explicitly test `NSEventTrackingRunLoopMode`; a successful default-mode renderer smoke test misses menu-open stalls.
+- The HDR range is three control levels (110/120/130), mapped across current EDR headroom. Potential EDR headroom is not the control scale and must not advertise hundreds of ineffective slider percentages.
+- Use a session-stage tap at the head of the login-session stream to consume handled media brightness events before the native HUD. A HID-stage tap can install but miss these media events. Keep recording/disabled-routing/other-key pass-through intact. No new private API is needed for a custom HUD.
+- Date: 2026-10-28
+
+### L-030: A registered event tap is not proof of hardware-key delivery
+- The HID-stage tap registered successfully with mask 0x4c00 and reported enabled, yet the user’s media brightness keys bypassed FreeDisplay. Direct callback tests passed because they bypassed WindowServer routing.
+- Restore `cgSessionEventTap` + `headInsertEventTap` for the media/system-defined brightness stream. Verify physical-key reception, modifier shortcuts, secondary-pointer routing, live model updates and the visible HUD. Do not describe handler-only tests as end-to-end keyboard verification.
+- Recover indefinitely from invalid/disabled taps and permission-state changes; expose an event count separately from installed status. Record only brightness/configured shortcut diagnostics, not ordinary typing.
+- Refresh the app bundle directory modification date after export/copy. `ditto` can preserve an old folder date even with a fresh executable and correct build hash.
+- Verified: main 120 → 110, secondary 28 → 21.75 via Option+Brightness Down, and user-confirmed secondary-pointer slider/HUD behavior.
+- Date: 2026-10-28
+
+### L-031: EDR headroom and selected multiplier do not prove visible desktop boost
+- The screen reported current EDR headroom around 2.2×, and regression assertions showed increasing multipliers, but a `CIMultiplyCompositing` filter object on the Metal layer did not brighten the desktop across windows.
+- Pass the render-server `multiply` mode through the existing `CALayer.compositingFilter` property to composite the extended-range surface with the desktop backdrop. Keep rendering floating-point extended-linear pixels.
+- A renderer that selects the expected clear color can still fail in desktop composition. Separate command/state tests from a real 100% versus 130% comparison; do not label the former as verified visible output.
+- The user confirmed visible extra brightness in build 3CoNW9B after the compositor correction. Keyboard/session-tap handling was unchanged.
+- Date: 2026-10-28

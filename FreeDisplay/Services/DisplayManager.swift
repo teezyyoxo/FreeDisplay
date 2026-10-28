@@ -67,6 +67,8 @@ class DisplayManager: ObservableObject {
         removedIDs.forEach {
             DDCService.shared.clearCache(for: $0)
             BrightnessService.shared.invalidateDDCState(for: $0)
+            BrightnessService.shared.cancelAnimation(for: $0)
+            BrightnessService.shared.invalidateHardwareBrightness(for: $0)
         }
 
         // Diff-based refresh: keep existing DisplayInfo objects (preserves @Published state)
@@ -88,6 +90,7 @@ class DisplayManager: ObservableObject {
 
         displays = updatedDisplays
         DisplayManagerAccessor.shared.displays = updatedDisplays
+        HDRBrightnessService.shared.refresh(displays: updatedDisplays)
 
         // Only load details / refresh brightness for newly appeared displays
         for display in addedDisplays {
@@ -105,6 +108,7 @@ class DisplayManager: ObservableObject {
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 BrightnessService.shared.reapplySoftwareBrightnessIfNeeded(for: display)
                 GammaService.shared.reapplyIfNeeded(for: display.displayID)
+                HDRBrightnessService.shared.reapply(for: display)
             }
         }
 
@@ -174,6 +178,7 @@ class DisplayManager: ObservableObject {
     /// (for setModeFlag / setMainFlag events).
     /// Cheaper than a full `refreshDisplays()` — does not add/remove DisplayInfo objects.
     func refreshExistingDisplayModes() {
+        HDRBrightnessService.shared.refresh(displays: displays)
         for display in displays {
             // Always refresh isMain synchronously since it's cheap and needed for setMainFlag events.
             display.isMain = CGDisplayIsMain(display.displayID) != 0
