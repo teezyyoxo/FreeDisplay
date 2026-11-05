@@ -2,11 +2,6 @@ import AppKit
 import CoreGraphics
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    private var wakeObserver: NSObjectProtocol?
-
-    /// Called by FreeDisplayApp to provide access to the live DisplayManager instance.
-    var onWake: (() -> Void)?
-
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Quit if another instance is already running.
         let runningApps = NSWorkspace.shared.runningApplications.filter {
@@ -19,20 +14,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         BrightnessKeyService.shared.start()
-
-        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.onWake?()
-        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        if let obs = wakeObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(obs)
-        }
         BrightnessKeyService.shared.stop()
         BrightnessHUDService.shared.stop()
         HDRBrightnessService.shared.stop()

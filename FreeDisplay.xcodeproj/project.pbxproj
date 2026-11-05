@@ -22,6 +22,7 @@
 		3EA5920A3F5338CB1F05642C /* PresetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76FBEDC2A57F5FBBEE11AA0 /* PresetService.swift */; };
 		3EB262F0A45A2A8F1E9FBCE9 /* FreeDisplayApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D732A8A7009C298C78D6895C /* FreeDisplayApp.swift */; };
 		3EE2E724BDB262D96D408A44 /* AutoBrightnessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2D3E618AD92121297F8A33A /* AutoBrightnessService.swift */; };
+		41D53921C5F0B8A021744EA3 /* DDCDisplayRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6691CE24FBE3EA868B05F99 /* DDCDisplayRouting.swift */; };
 		4AA949AC237EE0320969D676 /* DisplayModeListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F049322038220CBB75B6985 /* DisplayModeListView.swift */; };
 		4C8A0C530FDFF72F78F5DFD3 /* BrightnessHUDService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50B61D6248DB61E562B4E3D /* BrightnessHUDService.swift */; };
 		4CD8C44716AD15C335F634EB /* ShortcutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F95730FB4704AD0F3F01D93F /* ShortcutRecorder.swift */; };
@@ -113,6 +114,7 @@
 		E5483CA367C0673369C00E5A /* SettingsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsService.swift; sourceTree = "<group>"; };
 		F22B3A7EF51E72B078901699 /* ImageAdjustmentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageAdjustmentView.swift; sourceTree = "<group>"; };
 		F606C5D467CD44404890F6EC /* VirtualDisplayService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualDisplayService.swift; sourceTree = "<group>"; };
+		F6691CE24FBE3EA868B05F99 /* DDCDisplayRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DDCDisplayRouting.swift; sourceTree = "<group>"; };
 		F95730FB4704AD0F3F01D93F /* ShortcutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -214,6 +216,7 @@
 			isa = PBXGroup;
 			children = (
 				8E6CC52AD5A38001AD3DC18B /* BrightnessScale.swift */,
+				F6691CE24FBE3EA868B05F99 /* DDCDisplayRouting.swift */,
 				1E64DDC8BA67C7E60001FDC6 /* DisplayInfo.swift */,
 				87A2686369A9F9969B89376E /* DisplayMode.swift */,
 				5E9756B168F3CBD4A8DA6E3C /* DisplayPreset.swift */,
@@ -375,6 +378,7 @@
 				E061011F318208D7FF94D963 /* CGHelpers.swift in Sources */,
 				6C97C09AAFC84C7DF9FFFC4F /* ColorProfileService.swift in Sources */,
 				2A82397FAC6CCCA0966AAED5 /* ColorProfileView.swift in Sources */,
+				41D53921C5F0B8A021744EA3 /* DDCDisplayRouting.swift in Sources */,
 				80CA5725D4B2AA1D35E1C527 /* DDCService.swift in Sources */,
 				67C5BDA583DF55CAE1C63822 /* DisplayDetailView.swift in Sources */,
 				20BC0BD119FFB0F3BAC751FD /* DisplayInfo.swift in Sources */,
@@ -492,7 +496,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.freedisplay.app;
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "FreeDisplay/FreeDisplay-Bridging-Header.h";
@@ -522,7 +526,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.freedisplay.app;
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "FreeDisplay/FreeDisplay-Bridging-Header.h";

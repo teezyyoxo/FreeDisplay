@@ -36,6 +36,9 @@ final class GammaService: @unchecked Sendable {
 }
 final class DDCService: @unchecked Sendable {
     static let shared = DDCService()
+    var configurationGeneration: UInt64 { lock.withLock { generation } }
+    private var generation: UInt64 = 0
+    func invalidateRouting() { lock.withLock { generation &+= 1 } }
     static let brightnessVCP: UInt8 = 0x10
     private let lock = NSLock()
     private var recorded: [UInt16] = []
@@ -140,6 +143,20 @@ final class DDCService: @unchecked Sendable {
         print("PASS: HDR default enabled only for compatible displays")
 
         let service = BrightnessService.shared
+        let softwareKey = "fd.softwareBrightness.\(primary.displayUUID)"
+        let legacySoftwareKey = "fd.softBrightness_\(primary.displayID)"
+        defaults.set(0.1, forKey: legacySoftwareKey)
+        service.reapplySoftwareBrightnessIfNeeded(for: primary)
+        precondition(service.currentSoftwareBrightness(for: primary.displayID) == nil, "Unsafe ID-only dimming was restored")
+        service.setSoftwareBrightness(60, for: primary.displayID)
+        precondition(defaults.double(forKey: softwareKey) == 0.6)
+        service.forgetSoftwareBrightness(for: primary.displayID)
+        precondition(service.currentSoftwareBrightness(for: primary.displayID) == nil)
+        service.reapplySoftwareBrightnessIfNeeded(for: primary)
+        precondition(service.currentSoftwareBrightness(for: primary.displayID) == 0.6)
+        service.resetSoftwareBrightness(for: primary.displayID)
+        precondition(defaults.object(forKey: softwareKey) == nil)
+        print("PASS: software dimming persists by physical UUID and ignores legacy ID-only factors")
         primary.brightness = 50
         service.setBrightnessImmediately(50, for: primary)
         for _ in 0..<4 { BrightnessKeyService.shared.perform(.primaryUp) }
@@ -219,6 +236,28 @@ final class DDCService: @unchecked Sendable {
         }
         if primary.supportsHDRBrightness {
             HDRBrightnessService.shared.setEnabled(true, for: primary)
+            // Reconnect/reconfiguration can complete while hardware callbacks are pending.
+            DDCService.shared.deferWrites()
+            service.setBrightnessImmediately(70, for: primary)
+            DDCService.shared.invalidateRouting()
+            let beforeConfigurationCallback = GammaService.shared.writes
+            DDCService.shared.failDeferredWrites()
+            try? await Task.sleep(for: .milliseconds(50))
+            precondition(GammaService.shared.writes == beforeConfigurationCallback, "An old route changed gamma before display refresh")
+            DDCService.shared.deferWrites()
+            service.setBrightnessImmediately(70, for: primary)
+            service.invalidateDDCState(for: primary.displayID)
+            let beforeStaleCallback = GammaService.shared.writes
+            DDCService.shared.failDeferredWrites()
+            try? await Task.sleep(for: .milliseconds(50))
+            precondition(service.isDDCAvailable(for: primary.displayID) == nil)
+            precondition(GammaService.shared.writes == beforeStaleCallback, "A disconnected session changed software brightness")
+            await service.refreshBrightness(for: primary)
+            service.invalidateDDCState(for: primary.displayID)
+            DDCService.shared.completeRead()
+            try? await Task.sleep(for: .milliseconds(50))
+            precondition(service.isDDCAvailable(for: primary.displayID) == nil, "Stale read enabled DDC for a new session")
+            print("PASS: late DDC read/write callbacks cannot alter a reconfigured display session")
             DDCService.shared.deferWrites()
             service.invalidateDDCState(for: primary.displayID)
             service.setBrightnessImmediately(70, for: primary)

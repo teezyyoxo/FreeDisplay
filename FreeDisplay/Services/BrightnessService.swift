@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import IOKit
 import IOKit.graphics
 import CoreGraphics
@@ -58,9 +59,7 @@ final class BrightnessAnimator {
                 guard let self else { return }
                 self.currentStep += 1
                 let progress = Double(self.currentStep) / Double(self.totalSteps)
-                // Ease-out curve: smoother deceleration at the end
-                let eased = 1.0 - pow(1.0 - progress, 2.0)
-                let value = self.startValue + (self.targetValue - self.startValue) * eased
+                let value = self.startValue + (self.targetValue - self.startValue) * progress
                 let isLast = self.currentStep >= self.totalSteps
                 if isLast {
                     self.timer?.invalidate()
@@ -91,6 +90,7 @@ final class BrightnessService: @unchecked Sendable {
     @MainActor private var hardwareBrightnessTargets: [CGDirectDisplayID: Double] = [:]
     @MainActor private var appliedBrightness: [CGDirectDisplayID: Double] = [:]
     @MainActor private var lastSliderWrite: [CGDirectDisplayID: TimeInterval] = [:]
+    @MainActor private var ddcGeneration: [CGDirectDisplayID: UInt64] = [:]
 
     @MainActor
     func invalidateHardwareBrightness(for displayID: CGDirectDisplayID) {
@@ -126,16 +126,19 @@ final class BrightnessService: @unchecked Sendable {
     private var softwareBrightnessFactors: [CGDirectDisplayID: Double] = [:]
     private let softwareBrightnessLock = NSLock()
 
-    private func softBrightnessKey(for displayID: CGDirectDisplayID) -> String {
-        "fd.softBrightness_\(displayID)"
+    private func softBrightnessKey(for displayID: CGDirectDisplayID) -> String? {
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(displayID),
+              let string = CFUUIDCreateString(nil, uuid.takeRetainedValue()) else { return nil }
+        return "fd.softwareBrightness.\(string)"
     }
 
     private func saveSoftwareBrightness(factor: Double, for displayID: CGDirectDisplayID) {
-        UserDefaults.standard.set(factor, forKey: softBrightnessKey(for: displayID))
+        guard let key = softBrightnessKey(for: displayID) else { return }
+        UserDefaults.standard.set(factor, forKey: key)
     }
 
     private func loadSoftwareBrightness(for displayID: CGDirectDisplayID) -> Double? {
-        let key = softBrightnessKey(for: displayID)
+        guard let key = softBrightnessKey(for: displayID) else { return nil }
         guard UserDefaults.standard.object(forKey: key) != nil else { return nil }
         return UserDefaults.standard.double(forKey: key)
     }
@@ -143,6 +146,11 @@ final class BrightnessService: @unchecked Sendable {
     /// Returns the current software brightness factor for a display, or nil if not set.
     func currentSoftwareBrightness(for displayID: CGDirectDisplayID) -> Double? {
         softwareBrightnessLock.withLock { softwareBrightnessFactors[displayID] }
+    }
+
+    /// Drop the transient ID association; the physical display's UUID preference remains.
+    func forgetSoftwareBrightness(for displayID: CGDirectDisplayID) {
+        _ = softwareBrightnessLock.withLock { softwareBrightnessFactors.removeValue(forKey: displayID) }
     }
 
     // MARK: - DDC Availability Cache
@@ -162,9 +170,12 @@ final class BrightnessService: @unchecked Sendable {
 
     @MainActor
     func refreshBrightness(for display: DisplayInfo) async {
+        guard display.isOnline else { return }
         let previousBrightness = display.brightness
         let isBuiltin = display.isBuiltin
         let displayID = display.displayID
+        let generation = ddcGeneration[displayID, default: 0]
+        let routingGeneration = DDCService.shared.configurationGeneration
 
         if isBuiltin {
             let brightness = await withCheckedContinuation { continuation in
@@ -189,24 +200,27 @@ final class BrightnessService: @unchecked Sendable {
             DDCService.shared.readAsync(
                 displayID: displayID,
                 command: DDCService.brightnessVCP
-            ) { [weak self] result in
+            ) { [weak self, weak display] result in
                 guard let self else { return }
-                if let result = result, result.max > 0 {
-                    let brightness = Double(result.current) / Double(result.max) * 100.0
-                    self.ddcAvailableLock.lock()
-                    self.ddcAvailable[displayID] = true
-                    self.ddcMaxBrightness[displayID] = result.max
-                    self.ddcAvailableLock.unlock()
-                    Task { @MainActor in
+                Task { @MainActor in
+                    guard self.ddcGeneration[displayID, default: 0] == generation,
+                          DDCService.shared.configurationGeneration == routingGeneration,
+                          let display, display.isOnline else { return }
+                    if let result = result, result.max > 0 {
+                        let brightness = Double(result.current) / Double(result.max) * 100.0
+                        self.ddcAvailableLock.withLock {
+                            self.ddcAvailable[displayID] = true
+                            self.ddcMaxBrightness[displayID] = result.max
+                        }
                         if display.brightness == previousBrightness, display.brightness <= 100 { display.brightness = brightness }
+                    } else {
+                        // DDC read returned nil; mark unavailable
+                        self.ddcAvailableLock.withLock {
+                            if self.ddcAvailable[displayID] == nil {
+                                self.ddcAvailable[displayID] = false
+                            }
+                        }
                     }
-                } else {
-                    // DDC read returned nil; mark unavailable
-                    self.ddcAvailableLock.lock()
-                    if self.ddcAvailable[displayID] == nil {
-                        self.ddcAvailable[displayID] = false
-                    }
-                    self.ddcAvailableLock.unlock()
                 }
             }
         }
@@ -230,14 +244,14 @@ final class BrightnessService: @unchecked Sendable {
         let now = Date.timeIntervalSinceReferenceDate
         let needsWrite = isFinal || brightness > 100 || display.brightness > 100
             || isDDCAvailable(for: display.displayID) != true
-            || now - (lastSliderWrite[display.displayID] ?? 0) >= 0.1
+            || now - (lastSliderWrite[display.displayID] ?? 0) >= 0.01
         if needsWrite { lastSliderWrite[display.displayID] = now }
         applyBrightness(brightness, for: display, isAutoAdjust: false, writesHardware: needsWrite)
     }
 
     @MainActor
     private func applyBrightness(_ brightness: Double, for display: DisplayInfo, isAutoAdjust: Bool, updatesTarget: Bool = true, writesHardware: Bool = true) {
-        guard brightness.isFinite else { return }
+        guard brightness.isFinite, display.isOnline else { return }
         let requested = HDRBrightnessService.shared.apply(brightness, for: display)
         let hardwareBrightness = min(100, requested)
         let displayID = display.displayID
@@ -279,15 +293,21 @@ final class BrightnessService: @unchecked Sendable {
             }
             let knownMax = ddcAvailableLock.withLock { ddcMaxBrightness[displayID] ?? 100 }
             let value = UInt16(hardwareBrightness / 100 * Double(knownMax))
+            let generation = ddcGeneration[displayID, default: 0]
+            let routingGeneration = DDCService.shared.configurationGeneration
             DDCService.shared.writeAsync(
                 displayID: displayID, command: DDCService.brightnessVCP, value: value
             ) { [weak self, weak display] success in
                 guard let self else { return }
-                self.ddcAvailableLock.withLock { self.ddcAvailable[displayID] = success }
-                if !success {
-                    DispatchQueue.main.async {
-                        // Use the latest target: a failed older write must not undo a newer adjustment.
-                        guard let display, display.isOnline else { return }
+                Task { @MainActor in
+                    guard self.ddcGeneration[displayID, default: 0] == generation,
+                          DDCService.shared.configurationGeneration == routingGeneration,
+                          let display, display.isOnline else { return }
+                    self.ddcAvailableLock.withLock { self.ddcAvailable[displayID] = success }
+                    if success, (self.currentSoftwareBrightness(for: displayID) ?? 1) < 1 {
+                        self.resetSoftwareBrightness(for: displayID)
+                    } else if !success {
+                        // A failed older write must not undo a newer adjustment.
                         if display.brightness <= 100 || (self.currentSoftwareBrightness(for: displayID) ?? 1) < 1 {
                             self.setSoftwareBrightness(min(100, display.brightness), for: displayID)
                         }
@@ -314,16 +334,7 @@ final class BrightnessService: @unchecked Sendable {
             setBrightnessImmediately(target, for: display, isAutoAdjust: isAutoAdjust)
             return
         }
-        let from = appliedBrightness[display.displayID] ?? previous
-        display.brightness = target
-        SettingsService.shared.setBrightness(target, for: display.displayID)
-        let usesDDC = !display.isBuiltin && isDDCAvailable(for: display.displayID) != false
-        animator(for: display.displayID).animate(
-            from: from, to: target, steps: usesDDC ? 5 : 8, duration: 0.20
-        ) { [weak self, weak display] value, _ in
-            guard let self, let display else { return }
-            self.applyBrightness(value, for: display, isAutoAdjust: isAutoAdjust, updatesTarget: false)
-        }
+        setBrightnessImmediately(target, for: display, isAutoAdjust: isAutoAdjust)
     }
 
     // MARK: - Software Brightness (Gamma Table Fallback)
@@ -344,7 +355,7 @@ final class BrightnessService: @unchecked Sendable {
     /// Removes software dimming while retaining the display's image adjustments.
     func resetSoftwareBrightness(for displayID: CGDirectDisplayID) {
         _ = softwareBrightnessLock.withLock { softwareBrightnessFactors.removeValue(forKey: displayID) }
-        UserDefaults.standard.removeObject(forKey: softBrightnessKey(for: displayID))
+        if let key = softBrightnessKey(for: displayID) { UserDefaults.standard.removeObject(forKey: key) }
         GammaService.shared.applySoftwareBrightness(for: displayID)
     }
 
@@ -356,7 +367,9 @@ final class BrightnessService: @unchecked Sendable {
 
     /// Clears DDC availability and max brightness cache for a disconnected display.
     /// Call this when a display is removed so stale state cannot pollute a reconnect.
+    @MainActor
     func invalidateDDCState(for displayID: CGDirectDisplayID) {
+        ddcGeneration[displayID, default: 0] &+= 1
         ddcAvailableLock.withLock {
             ddcAvailable.removeValue(forKey: displayID)
             ddcMaxBrightness.removeValue(forKey: displayID)
@@ -460,7 +473,25 @@ final class BrightnessService: @unchecked Sendable {
         return nil
     }
 
+    // DisplayServices applies brightness immediately; IODisplaySetFloatParameter triggers a multi-second system fade.
+    private typealias DisplayServicesSetBrightnessFn = @convention(c) (CGDirectDisplayID, Float) -> Int32
+    private static let displayServicesSetBrightness: DisplayServicesSetBrightnessFn? = {
+        guard let handle = dlopen("/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices", RTLD_LAZY),
+              let sym = dlsym(handle, "DisplayServicesSetBrightness") else { return nil }
+        return unsafeBitCast(sym, to: DisplayServicesSetBrightnessFn.self)
+    }()
+
     private func setInternalBrightness(_ value: Float) {
+        if let set = Self.displayServicesSetBrightness {
+            var count: UInt32 = 0
+            CGGetOnlineDisplayList(0, nil, &count)
+            var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+            CGGetOnlineDisplayList(count, &ids, &count)
+            if let builtin = ids.prefix(Int(count)).first(where: { CGDisplayIsBuiltin($0) != 0 }),
+               set(builtin, value) == 0 {
+                return
+            }
+        }
         // Primary: use CGDisplayIOServicePort to target only the builtin display service
         if let servicePort = builtinIOService() {
             if IODisplaySetFloatParameter(

@@ -52,3 +52,10 @@
 - **解法**: 使用 IOAVService 私有 API（`IOAVServiceCreateWithService` + `IOAVServiceWriteI2C` / `IOAVServiceReadI2C`），通过 DCPAVServiceProxy IOKit 服务查找外接显示器
 - **教训**: 不同 CPU 架构的 macOS 使用完全不同的显示器通信 API。MonitorControl、BetterDisplay 都用 IOAVService。参考 alinpanaitiu.com/blog/journey-to-ddc-on-m1-macs/
 - **日期**: 2026-03-03
+
+### L-032: Never assign DDC endpoints by enumeration order
+- **Incident (2026-11-05):** CG display 2 was G32QC A, but the first external AV proxy belonged to HP 27b Curved. Ancestor vendor/product lookup found no identity; sorted-index fallback swapped the ports. G32 commands changed HP while G32 stayed at 100%.
+- **Identity location:** `DisplayAttributes.ProductAttributes` is on `IOMobileFramebufferShim` / `AppleCLCD2`. The AV endpoint's ancestor name explicitly identifies the framebuffer port (`dispext0:dcpav-service-epic:0`). Associate those port names, then require a unique name/serial match against main-actor display snapshots. Both connected panels reported the same numeric serial, so serial alone is insufficient.
+- **Required fallback:** Missing/conflicting identity means no hardware route. Use GammaService for that display; never use array order, a remaining unmatched service, or vendor/model guesses. Duplicate panel identities must fail closed.
+- **Lifecycle:** Configuration generations cancel old queued work; brightness callbacks check their display session. Reacquire and release AV connections per transaction, invalidate on wake/reconfiguration, and detect reused CG IDs. UUID persistence prevents software dimming moving to another physical panel.
+- **Verification:** `bash tests/run-ddc-routing.sh` and `bash tests/run-brightness.sh`; live G32 100 → 70 readback with HP unchanged at 57, then restore. See [brightness routing](../brightness-routing.md).

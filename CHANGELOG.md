@@ -4,6 +4,17 @@ All notable changes to FreeDisplay are documented here.
 
 ---
 
+## v1.1.0 (2026-11-05)
+
+- Fix G32 controls changing the HP secondary monitor while leaving the G32 at full brightness. Match each DDC endpoint to its named framebuffer port and a unique physical display identity; remove enumeration-order and vendor/model fallback assignments.
+- Use per-display software dimming when hardware identity is missing or ambiguous, instead of risking a command to another monitor. Validate DDC reply framing, result, command echo, checksum, and brightness range.
+- Rebuild routing on display reconfiguration and wake, cancel queued commands from older configurations, and ignore stale brightness callbacks. Replace display models when macOS reuses an ID for another physical monitor.
+- Release DDC connections after each transaction. Save software dimming by display UUID, disregard unsafe legacy ID-only factors, and clear leftover software dimming after a successful hardware adjustment.
+- Register wake recovery when the display manager starts, so recovery works before the menu is opened.
+- Add regression coverage for the captured G32/HP routing failure, reversed enumeration, unavailable/ambiguous endpoints, reused IDs, invalid replies, queue cancellation, and late callbacks. Verify G32 hardware brightness changes independently of HP on the connected monitors.
+- Make built-in brightness changes immediate: set brightness through DisplayServices (loaded at runtime, IOKit fallback) instead of the IOKit parameter that triggers a multi-second system fade. Apply key and preset changes directly with no ramp, and shorten the slider write throttle to 10 ms.
+- Coalesce queued DDC brightness writes per display so only the newest value is sent; previously every step queued behind a full IORegistry routing scan, delaying external-monitor changes by seconds.
+
 ## v1.0.2 (2026-10-28)
 
 - Enable HDR / XDR brightness by default on compatible displays while preserving explicit per-display opt-outs.

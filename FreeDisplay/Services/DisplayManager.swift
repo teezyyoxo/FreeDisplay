@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import AppKit
 
 // Global C-compatible callback for display reconfiguration.
 // Must be a top-level function (not a closure) to be used as a C function pointer.
@@ -11,20 +12,19 @@ private func displayReconfigCallback(
     guard let ptr = userInfo else { return }
     let manager = Unmanaged<DisplayManager>.fromOpaque(ptr).takeUnretainedValue()
 
-    let relevant: CGDisplayChangeSummaryFlags = [.addFlag, .removeFlag, .setMainFlag, .setModeFlag]
+    if flags.contains(.beginConfigurationFlag) {
+        DDCService.shared.invalidateDisplayMappings()
+        return
+    }
+    let relevant: CGDisplayChangeSummaryFlags = [.addFlag, .removeFlag, .setMainFlag, .setModeFlag,
+                                                .enabledFlag, .disabledFlag, .mirrorFlag, .unMirrorFlag]
     guard !flags.intersection(relevant).isEmpty else { return }
 
-    // Skip the begin-configuration notification; only act when the change is complete.
-    // (beginConfigurationFlag is set at the start of a transaction; absence means it finished.)
-    guard !flags.contains(.beginConfigurationFlag) else { return }
+    DDCService.shared.invalidateDisplayMappings()
 
     Task { @MainActor in
-        if flags.intersection([.addFlag, .removeFlag]).isEmpty {
-            // Mode or main-display change: refresh mode info for existing displays only.
-            manager.refreshExistingDisplayModes()
-        } else {
-            manager.refreshDisplays()
-        }
+        manager.refreshDisplays()
+        manager.refreshExistingDisplayModes()
 
         // Auto-rearrange after any display config change completes (debounced 500 ms).
         manager.scheduleAutoArrange()
@@ -37,6 +37,9 @@ class DisplayManager: ObservableObject {
 
     // nonisolated(unsafe) allows deinit (which is nonisolated in Swift 6) to access this value.
     nonisolated(unsafe) private var callbackContext: UnsafeMutableRawPointer?
+    nonisolated(unsafe) private var wakeObserver: NSObjectProtocol?
+    private var wakeTask: Task<Void, Never>?
+    private var displayUUIDs: [CGDirectDisplayID: String] = [:]
 
     /// Work item used to debounce auto-arrange calls triggered by display config changes.
     private var autoArrangeWorkItem: DispatchWorkItem?
@@ -44,9 +47,30 @@ class DisplayManager: ObservableObject {
     init() {
         refreshDisplays()
         setupReconfigCallback()
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                DDCService.shared.invalidateDisplayMappings()
+                self.wakeTask?.cancel()
+                self.wakeTask = Task { @MainActor [weak self] in
+                    do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                    guard let self else { return }
+                    self.refreshDisplays()
+                    for display in self.displays {
+                        BrightnessService.shared.reapplySoftwareBrightnessIfNeeded(for: display)
+                        GammaService.shared.reapplyIfNeeded(for: display.displayID)
+                        BrightnessService.shared.setBrightnessImmediately(display.brightness, for: display, isAutoAdjust: true)
+                        ResolutionService.shared.reapplySavedModeIfNeeded(for: display.displayID)
+                    }
+                }
+            }
+        }
     }
 
     deinit {
+        if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
         if let ctx = callbackContext {
             CGDisplayRemoveReconfigurationCallback(displayReconfigCallback, ctx)
             Unmanaged<DisplayManager>.fromOpaque(ctx).release()
@@ -64,24 +88,30 @@ class DisplayManager: ObservableObject {
 
         // Clean up DDC cache for removed displays to prevent stale entries accumulating
         let removedIDs = currentIDs.subtracting(newIDSet)
-        removedIDs.forEach {
-            DDCService.shared.clearCache(for: $0)
-            BrightnessService.shared.invalidateDDCState(for: $0)
-            BrightnessService.shared.cancelAnimation(for: $0)
-            BrightnessService.shared.invalidateHardwareBrightness(for: $0)
+        removedIDs.forEach { removedID in
+            displays.first(where: { $0.displayID == removedID })?.isOnline = false
+            DDCService.shared.clearCache(for: removedID)
+            BrightnessService.shared.invalidateDDCState(for: removedID)
+            BrightnessService.shared.cancelAnimation(for: removedID)
+            BrightnessService.shared.invalidateHardwareBrightness(for: removedID)
+            BrightnessService.shared.forgetSoftwareBrightness(for: removedID)
         }
 
         // Diff-based refresh: keep existing DisplayInfo objects (preserves @Published state)
-        var existingByID = Dictionary(uniqueKeysWithValues: displays.map { ($0.displayID, $0) })
+        let existingByID = Dictionary(uniqueKeysWithValues: displays.map { ($0.displayID, $0) })
 
         var updatedDisplays: [DisplayInfo] = []
         var addedDisplays: [DisplayInfo] = []
 
         for i in 0..<Int(displayCount) {
             let id = displayIDs[i]
-            if let existing = existingByID[id] {
+            if let existing = existingByID[id], displayUUIDs[id] == existing.displayUUID {
                 updatedDisplays.append(existing)
             } else {
+                if let replaced = existingByID[id] {
+                    replaced.isOnline = false
+                    BrightnessService.shared.resetSoftwareBrightness(for: id)
+                }
                 let info = DisplayInfo(displayID: id)
                 updatedDisplays.append(info)
                 addedDisplays.append(info)
@@ -89,7 +119,9 @@ class DisplayManager: ObservableObject {
         }
 
         displays = updatedDisplays
+        displayUUIDs = Dictionary(uniqueKeysWithValues: updatedDisplays.map { ($0.displayID, $0.displayUUID) })
         DisplayManagerAccessor.shared.displays = updatedDisplays
+        refreshDDCRouting()
         HDRBrightnessService.shared.refresh(displays: updatedDisplays)
 
         // Only load details / refresh brightness for newly appeared displays
@@ -106,6 +138,7 @@ class DisplayManager: ObservableObject {
             // Brief delay lets WindowServer settle before we write transfer tables.
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 300_000_000)
+                guard display.isOnline else { return }
                 BrightnessService.shared.reapplySoftwareBrightnessIfNeeded(for: display)
                 GammaService.shared.reapplyIfNeeded(for: display.displayID)
                 HDRBrightnessService.shared.reapply(for: display)
@@ -178,7 +211,6 @@ class DisplayManager: ObservableObject {
     /// (for setModeFlag / setMainFlag events).
     /// Cheaper than a full `refreshDisplays()` — does not add/remove DisplayInfo objects.
     func refreshExistingDisplayModes() {
-        HDRBrightnessService.shared.refresh(displays: displays)
         for display in displays {
             // Always refresh isMain synchronously since it's cheap and needed for setMainFlag events.
             display.isMain = CGDisplayIsMain(display.displayID) != 0
@@ -188,6 +220,24 @@ class DisplayManager: ObservableObject {
                 }.value
                 display.currentDisplayMode = newMode
             }
+        }
+    }
+
+    /// Snapshot screen identity on the main actor; DDC never reads AppKit on its I/O queue.
+    private func refreshDDCRouting() {
+        let targets = displays.filter {
+            $0.isOnline && !$0.isBuiltin && !VirtualDisplayService.shared.isVirtualDisplay($0.displayID)
+                && CGDisplayMirrorsDisplay($0.displayID) == kCGNullDirectDisplay
+                && CGDisplayIsInMirrorSet($0.displayID) == 0
+        }.map {
+            DDCDisplayRouting.Target(displayID: $0.displayID, uuid: $0.displayUUID,
+                                     name: $0.name, serialNumber: $0.serialNumber)
+        }
+        DDCService.shared.updateDisplayTargets(targets)
+        for display in displays {
+            BrightnessService.shared.cancelAnimation(for: display.displayID)
+            BrightnessService.shared.invalidateDDCState(for: display.displayID)
+            BrightnessService.shared.invalidateHardwareBrightness(for: display.displayID)
         }
     }
 

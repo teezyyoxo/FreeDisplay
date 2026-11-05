@@ -11,7 +11,7 @@ ARCHIVE_PATH="$BUILD_DIR/FreeDisplay.xcarchive"
 APP_EXPORT_DIR="$PROJECT_ROOT/apps/Release"
 APP_PATH="$APP_EXPORT_DIR/FreeDisplay.app"
 DMG_PATH="$BUILD_DIR/FreeDisplay.dmg"
-APP_VERSION="1.0.2"
+APP_VERSION="1.1.0"
 
 build_hash_of() {
     /usr/libexec/PlistBuddy -c 'Print :FDBuildHash' "$1/Contents/Info.plist"
