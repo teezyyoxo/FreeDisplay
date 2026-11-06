@@ -108,9 +108,11 @@
 
 1. Download the latest FreeDisplay ZIP from [Releases](https://github.com/teezyyoxo/FreeDisplay/releases/latest).
 2. Unzip it and move **FreeDisplay.app** to **Applications**.
-3. On first launch, right-click the app and choose **Open**. The build is ad-hoc signed and not notarized, so macOS asks for approval once.
+3. Open FreeDisplay. The current release is development-signed and not notarized.
 
-macOS may ask you to grant the permissions below again after you update, because an ad-hoc signature changes with each build.
+> **Gatekeeper:** If macOS blocks the app, open **System Settings → Privacy & Security**, select **Open Anyway**, and confirm. Only do this if you trust the download.
+
+macOS may ask you to grant the permissions below again after an update.
 
 ### Build from source
 
