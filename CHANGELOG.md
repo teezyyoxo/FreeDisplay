@@ -4,6 +4,14 @@ All notable changes to FreeDisplay are documented here.
 
 ---
 
+## v1.1.1a (2026-11-06)
+
+- Extend external displays' low-brightness range with software dimming below 20%, retaining a small visibility floor and restoring the chosen level after reconnect.
+- Hold Shift with brightness keys or display shortcuts for 1% steps through 100%; explicitly configured shortcuts take precedence.
+- Retry external-display DDC brightness after a failed read or write, so a temporary software fallback cannot leave the monitor's hardware backlight stuck low at 100%.
+- Clear stale software dimming when hardware brightness is detected, regardless of startup ordering, and ignore reads superseded by newer hardware writes.
+- Add regression coverage for DDC recovery and saved software-dimming restoration. Verify the HP 27b recovers from a simulated routing failure and reads back 50% and 100% hardware brightness (initially 6%).
+
 ## v1.1.0 (2026-11-05)
 
 - Fix G32 controls changing the HP secondary monitor while leaving the G32 at full brightness. Match each DDC endpoint to its named framebuffer port and a unique physical display identity; remove enumeration-order and vendor/model fallback assignments.

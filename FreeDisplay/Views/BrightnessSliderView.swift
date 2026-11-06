@@ -22,7 +22,8 @@ struct BrightnessSliderView: View {
     }
 
     private var brightnessSlider: some View {
-        HStack(spacing: 10) {
+        let minimum = display.isBuiltin ? 5.0 : 0.0
+        return HStack(spacing: 10) {
             Image(systemName: "sun.min.fill")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
@@ -32,13 +33,13 @@ struct BrightnessSliderView: View {
                 value: Binding(get: { display.brightness }, set: {
                     BrightnessService.shared.setBrightnessFromSlider($0, for: display)
                 }),
-                range: 5...display.maximumBrightness, step: 1,
+                range: minimum...display.maximumBrightness, step: 1,
                 tint: display.brightness > 100 ? .blue : .orange,
                 referenceValues: display.maximumBrightness > 100 ? [100, 110, 120] : [],
                 valueMapping: SliderValueMapping(
-                    fraction: { BrightnessScale.fraction($0, minimum: 5, maximum: display.maximumBrightness) },
-                    level: { BrightnessScale.level(at: $0, minimum: 5, maximum: display.maximumBrightness) },
-                    adjusted: { max(5, BrightnessScale.next($0, direction: $1, nativeStep: 1, maximum: display.maximumBrightness)) }
+                    fraction: { BrightnessScale.fraction($0, minimum: minimum, maximum: display.maximumBrightness) },
+                    level: { BrightnessScale.level(at: $0, minimum: minimum, maximum: display.maximumBrightness) },
+                    adjusted: { max(minimum, BrightnessScale.next($0, direction: $1, nativeStep: 1, maximum: display.maximumBrightness)) }
                 )
             ) { editing in
                 if editing {
@@ -135,6 +136,10 @@ struct CombinedBrightnessView: View {
         hdrBrightnessService.maximumBrightness(for: displays)
     }
 
+    private var minimumBrightness: Double {
+        displays.contains(where: { $0.isBuiltin }) ? 5 : 0
+    }
+
     private func apply(_ value: Double, isFinal: Bool = false) {
         combinedBrightness = BrightnessScale.normalized(value, maximum: maximumBrightness)
         for display in displays {
@@ -147,13 +152,13 @@ struct CombinedBrightnessView: View {
             MenuItemIcon(systemName: "sun.max.fill", color: .orange, size: 30)
             GlassSlider(
                 value: Binding(get: { combinedBrightness }, set: { apply($0) }),
-                range: 5...maximumBrightness, step: 1,
+                range: minimumBrightness...maximumBrightness, step: 1,
                 tint: combinedBrightness > 100 ? .blue : .orange,
                 referenceValues: maximumBrightness > 100 ? [100, 110, 120] : [],
                 valueMapping: SliderValueMapping(
-                    fraction: { BrightnessScale.fraction($0, minimum: 5, maximum: maximumBrightness) },
-                    level: { BrightnessScale.level(at: $0, minimum: 5, maximum: maximumBrightness) },
-                    adjusted: { max(5, BrightnessScale.next($0, direction: $1, nativeStep: 1, maximum: maximumBrightness)) }
+                    fraction: { BrightnessScale.fraction($0, minimum: minimumBrightness, maximum: maximumBrightness) },
+                    level: { BrightnessScale.level(at: $0, minimum: minimumBrightness, maximum: maximumBrightness) },
+                    adjusted: { max(minimumBrightness, BrightnessScale.next($0, direction: $1, nativeStep: 1, maximum: maximumBrightness)) }
                 )
             ) { editing in
                 isDragging = editing

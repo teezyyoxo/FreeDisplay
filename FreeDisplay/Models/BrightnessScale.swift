@@ -5,6 +5,15 @@ enum BrightnessScale {
     static let hdrLevels: [Double] = [110, 120, 130]
     static let hdrMaximum: Double = 130
     static let nativeSegments = 16
+    static let dimmingThreshold: Double = 20
+
+    static func hardwareLevel(_ level: Double) -> Double {
+        max(dimmingThreshold, min(100, level))
+    }
+
+    static func dimmingFactor(_ level: Double) -> Double {
+        max(0.05, min(1, level / dimmingThreshold))
+    }
 
     static func normalized(_ value: Double, maximum: Double) -> Double {
         guard value.isFinite else { return 100 }

@@ -91,6 +91,7 @@ final class BrightnessService: @unchecked Sendable {
     @MainActor private var appliedBrightness: [CGDirectDisplayID: Double] = [:]
     @MainActor private var lastSliderWrite: [CGDirectDisplayID: TimeInterval] = [:]
     @MainActor private var ddcGeneration: [CGDirectDisplayID: UInt64] = [:]
+    @MainActor private var ddcWriteRevision: [CGDirectDisplayID: UInt64] = [:]
 
     @MainActor
     func invalidateHardwareBrightness(for displayID: CGDirectDisplayID) {
@@ -130,6 +131,27 @@ final class BrightnessService: @unchecked Sendable {
         guard let uuid = CGDisplayCreateUUIDFromDisplayID(displayID),
               let string = CFUUIDCreateString(nil, uuid.takeRetainedValue()) else { return nil }
         return "fd.softwareBrightness.\(string)"
+    }
+
+    private func hybridBrightnessKey(for displayID: CGDirectDisplayID) -> String? {
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(displayID),
+              let string = CFUUIDCreateString(nil, uuid.takeRetainedValue()) else { return nil }
+        return "fd.hybridBrightness.\(string)"
+    }
+
+    private func savedHybridBrightness(for displayID: CGDirectDisplayID) -> Double? {
+        guard let key = hybridBrightnessKey(for: displayID),
+              let value = UserDefaults.standard.object(forKey: key) as? Double,
+              value >= 0, value < BrightnessScale.dimmingThreshold else { return nil }
+        return value
+    }
+
+    private func applyHybridDimming(_ brightness: Double, for displayID: CGDirectDisplayID) {
+        let factor = BrightnessScale.dimmingFactor(brightness)
+        let current = currentSoftwareBrightness(for: displayID) ?? 1
+        guard abs(current - factor) > 0.0001 else { return }
+        if factor < 1 { setSoftwareBrightness(factor * 100, for: displayID) }
+        else { resetSoftwareBrightness(for: displayID) }
     }
 
     private func saveSoftwareBrightness(factor: Double, for displayID: CGDirectDisplayID) {
@@ -175,6 +197,7 @@ final class BrightnessService: @unchecked Sendable {
         let isBuiltin = display.isBuiltin
         let displayID = display.displayID
         let generation = ddcGeneration[displayID, default: 0]
+        let writeRevision = ddcWriteRevision[displayID, default: 0]
         let routingGeneration = DDCService.shared.configurationGeneration
 
         if isBuiltin {
@@ -204,6 +227,7 @@ final class BrightnessService: @unchecked Sendable {
                 guard let self else { return }
                 Task { @MainActor in
                     guard self.ddcGeneration[displayID, default: 0] == generation,
+                          self.ddcWriteRevision[displayID, default: 0] == writeRevision,
                           DDCService.shared.configurationGeneration == routingGeneration,
                           let display, display.isOnline else { return }
                     if let result = result, result.max > 0 {
@@ -212,7 +236,17 @@ final class BrightnessService: @unchecked Sendable {
                             self.ddcAvailable[displayID] = true
                             self.ddcMaxBrightness[displayID] = result.max
                         }
-                        if display.brightness == previousBrightness, display.brightness <= 100 { display.brightness = brightness }
+                        if let saved = self.savedHybridBrightness(for: displayID),
+                           abs(brightness - BrightnessScale.dimmingThreshold) <= max(1, 100 / Double(result.max)) {
+                            self.applyHybridDimming(saved, for: displayID)
+                            if display.brightness == previousBrightness, display.brightness <= 100 { display.brightness = saved }
+                        } else {
+                            if let key = self.hybridBrightnessKey(for: displayID) { UserDefaults.standard.removeObject(forKey: key) }
+                            if (self.currentSoftwareBrightness(for: displayID) ?? self.loadSoftwareBrightness(for: displayID) ?? 1) < 1 {
+                                self.resetSoftwareBrightness(for: displayID)
+                            }
+                            if display.brightness == previousBrightness, display.brightness <= 100 { display.brightness = brightness }
+                        }
                     } else {
                         // DDC read returned nil; mark unavailable
                         self.ddcAvailableLock.withLock {
@@ -253,12 +287,16 @@ final class BrightnessService: @unchecked Sendable {
     private func applyBrightness(_ brightness: Double, for display: DisplayInfo, isAutoAdjust: Bool, updatesTarget: Bool = true, writesHardware: Bool = true) {
         guard brightness.isFinite, display.isOnline else { return }
         let requested = HDRBrightnessService.shared.apply(brightness, for: display)
-        let hardwareBrightness = min(100, requested)
+        let hardwareBrightness = display.isBuiltin ? min(100, requested) : BrightnessScale.hardwareLevel(requested)
         let displayID = display.displayID
         appliedBrightness[displayID] = requested
         if updatesTarget {
             display.brightness = requested
             SettingsService.shared.setBrightness(requested, for: displayID)
+            if !display.isBuiltin, let key = hybridBrightnessKey(for: displayID) {
+                if requested < BrightnessScale.dimmingThreshold { UserDefaults.standard.set(requested, forKey: key) }
+                else { UserDefaults.standard.removeObject(forKey: key) }
+            }
         }
 
         if !isAutoAdjust {
@@ -268,6 +306,9 @@ final class BrightnessService: @unchecked Sendable {
         // Remove any old software dimming before entering the extended range.
         if requested > 100, (currentSoftwareBrightness(for: displayID) ?? 1) < 1 {
             setSoftwareBrightness(100, for: displayID)
+        }
+        if !display.isBuiltin, isDDCAvailable(for: displayID) == true {
+            applyHybridDimming(requested, for: displayID)
         }
         guard writesHardware else { return }
 
@@ -287,25 +328,27 @@ final class BrightnessService: @unchecked Sendable {
                 // An already-neutral gamma table needs no write when entering HDR.
                 // Transfer-function changes can reset the screen's EDR state.
                 if requested <= 100 || (currentSoftwareBrightness(for: displayID) ?? 1) < 1 {
-                    setSoftwareBrightness(hardwareBrightness, for: displayID)
+                    setSoftwareBrightness(min(100, requested), for: displayID)
                 }
-                return
             }
             let knownMax = ddcAvailableLock.withLock { ddcMaxBrightness[displayID] ?? 100 }
             let value = UInt16(hardwareBrightness / 100 * Double(knownMax))
             let generation = ddcGeneration[displayID, default: 0]
             let routingGeneration = DDCService.shared.configurationGeneration
+            ddcWriteRevision[displayID, default: 0] &+= 1
+            let writeRevision = ddcWriteRevision[displayID, default: 0]
             DDCService.shared.writeAsync(
                 displayID: displayID, command: DDCService.brightnessVCP, value: value
             ) { [weak self, weak display] success in
                 guard let self else { return }
                 Task { @MainActor in
                     guard self.ddcGeneration[displayID, default: 0] == generation,
+                          self.ddcWriteRevision[displayID, default: 0] == writeRevision,
                           DDCService.shared.configurationGeneration == routingGeneration,
                           let display, display.isOnline else { return }
                     self.ddcAvailableLock.withLock { self.ddcAvailable[displayID] = success }
-                    if success, (self.currentSoftwareBrightness(for: displayID) ?? 1) < 1 {
-                        self.resetSoftwareBrightness(for: displayID)
+                    if success {
+                        self.applyHybridDimming(display.brightness, for: displayID)
                     } else if !success {
                         // A failed older write must not undo a newer adjustment.
                         if display.brightness <= 100 || (self.currentSoftwareBrightness(for: displayID) ?? 1) < 1 {
@@ -384,6 +427,14 @@ final class BrightnessService: @unchecked Sendable {
         let inMemory = softwareBrightnessLock.withLock { softwareBrightnessFactors[displayID] }
         let factor = inMemory ?? loadSoftwareBrightness(for: displayID)
         guard let f = factor, f < 1.0 else { return }
+        if isDDCAvailable(for: displayID) == true {
+            if let saved = savedHybridBrightness(for: displayID) {
+                setSoftwareBrightness(BrightnessScale.dimmingFactor(saved) * 100, for: displayID)
+            } else {
+                resetSoftwareBrightness(for: displayID)
+            }
+            return
+        }
         // Populate in-memory cache if loaded from disk
         if inMemory == nil {
             softwareBrightnessLock.withLock { softwareBrightnessFactors[displayID] = f }

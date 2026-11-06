@@ -56,6 +56,7 @@ final class DDCService: @unchecked Sendable {
         callbacks.forEach { $0(false) }
     }
     func forceUnavailable() { lock.withLock { failsWrites = true } }
+    func restoreAvailability() { lock.withLock { failsWrites = false } }
     private var reader: (@Sendable ((current: UInt16, max: UInt16)?) -> Void)?
     var writes: [UInt16] { lock.withLock { recorded } }
     func writeAsync(displayID: CGDirectDisplayID, command: UInt8, value: UInt16, completion: (@Sendable (Bool) -> Void)?) {
@@ -70,9 +71,9 @@ final class DDCService: @unchecked Sendable {
                    completion: @escaping @Sendable ((current: UInt16, max: UInt16)?) -> Void) {
         lock.withLock { reader = completion }
     }
-    func completeRead() {
+    func completeRead(_ result: (current: UInt16, max: UInt16)? = (10, 100)) {
         let callback = lock.withLock { let result = reader; reader = nil; return result }
-        callback?((10, 100))
+        callback?(result)
     }
 }
 
@@ -128,13 +129,62 @@ final class DDCService: @unchecked Sendable {
         precondition((try! JSONDecoder().decode(DisplayPresetEntry.self, from: oldPreset)).brightnessScaleVersion == nil)
         print("PASS: scale round trips, HDR snapping, boundary stepping and legacy migration")
 
-        let displays = NSScreen.screens.map { DisplayInfo(displayID: $0.displayID) }
+        let screens = ProcessInfo.processInfo.environment["FD_TEST_TARGET_HP"] == "1"
+            ? NSScreen.screens.filter { $0.localizedName == "HP 27b Curved" } : NSScreen.screens
+        let displays = screens.map { DisplayInfo(displayID: $0.displayID) }
         guard let primary = displays.first(where: { $0.isMain }) ?? displays.first else {
             print("SKIP: desktop integration needs a connected display")
             return
         }
         for display in displays { display.isBuiltin = false; display.brightness = 100 }
         DisplayManagerAccessor.shared.displays = displays
+        if ProcessInfo.processInfo.environment["FD_TEST_HP_ONLY"] == "1" {
+            guard let hp = displays.first(where: { $0.name == "HP 27b Curved" }), hp.displayID != primary.displayID else {
+                preconditionFailure("HP secondary display is required")
+            }
+            let event = CGEvent(keyboardEventSource: nil, virtualKey: 107, keyDown: true)!
+            event.flags = [.maskAlternate, .maskShift]
+            precondition(BrightnessKeyService.shared.handleEventFromCallback(type: .keyDown, event: event) == nil)
+            try? await Task.sleep(for: .milliseconds(50))
+            precondition(hp.brightness == 99, "Shift+Option must adjust the secondary by 1%")
+            precondition(primary.brightness == 100, "Secondary shortcut must not affect primary")
+            SettingsService.shared.shortcuts = [BrightnessShortcutAction.secondaryUp.rawValue:
+                ShortcutBinding(code: ShortcutKey.brightnessDown, modifiers: 0x80000 | 0x20000, keyName: "Brightness Down")]
+            hp.brightness = 50
+            precondition(BrightnessKeyService.shared.handleEventFromCallback(type: .keyDown, event: event) == nil)
+            try? await Task.sleep(for: .milliseconds(50))
+            precondition(hp.brightness == 56.25, "An exact custom shortcut must take priority over precision mode")
+
+            let service = BrightnessService.shared
+            DDCService.shared.forceUnavailable()
+            service.setBrightnessImmediately(5, for: hp)
+            try? await Task.sleep(for: .milliseconds(50))
+            precondition(service.isDDCAvailable(for: hp.displayID) == false)
+            precondition(service.currentSoftwareBrightness(for: hp.displayID) == 0.05)
+            DDCService.shared.restoreAvailability()
+            service.setBrightnessImmediately(5, for: hp)
+            try? await Task.sleep(for: .milliseconds(50))
+            precondition(service.isDDCAvailable(for: hp.displayID) == true)
+            precondition(DDCService.shared.writes.last == 20)
+            precondition(service.currentSoftwareBrightness(for: hp.displayID) == 0.25)
+            service.forgetSoftwareBrightness(for: hp.displayID)
+            service.invalidateDDCState(for: hp.displayID)
+            await service.refreshBrightness(for: hp)
+            DDCService.shared.completeRead((20, 100))
+            try? await Task.sleep(for: .milliseconds(50))
+            precondition(hp.brightness == 5 && service.currentSoftwareBrightness(for: hp.displayID) == 0.25)
+            service.setBrightnessImmediately(0, for: hp)
+            try? await Task.sleep(for: .milliseconds(50))
+            precondition(service.currentSoftwareBrightness(for: hp.displayID) == 0.05)
+            service.setBrightnessImmediately(20, for: hp)
+            try? await Task.sleep(for: .milliseconds(50))
+            precondition(service.currentSoftwareBrightness(for: hp.displayID) == nil)
+            service.setBrightnessImmediately(100, for: hp)
+            try? await Task.sleep(for: .milliseconds(50))
+            precondition(DDCService.shared.writes.last == 100 && primary.brightness == 100)
+            print("PASS: precise secondary shortcuts, low-end dimming, restoration and full brightness")
+            return
+        }
         HDRBrightnessService.shared.refresh(displays: displays)
         for display in displays {
             precondition(display.hdrBrightnessEnabled == display.supportsHDRBrightness)
@@ -157,14 +207,44 @@ final class DDCService: @unchecked Sendable {
         service.resetSoftwareBrightness(for: primary.displayID)
         precondition(defaults.object(forKey: softwareKey) == nil)
         print("PASS: software dimming persists by physical UUID and ignores legacy ID-only factors")
+        defaults.set(0.4, forKey: softwareKey)
+        await service.refreshBrightness(for: primary)
+        DDCService.shared.completeRead()
+        try? await Task.sleep(for: .milliseconds(50))
+        service.reapplySoftwareBrightnessIfNeeded(for: primary)
+        precondition(service.currentSoftwareBrightness(for: primary.displayID) == nil)
+        precondition(defaults.object(forKey: softwareKey) == nil, "DDC read must discard saved fallback dimming")
+        service.invalidateDDCState(for: primary.displayID)
+        defaults.set(0.4, forKey: softwareKey)
+        await service.refreshBrightness(for: primary)
+        service.reapplySoftwareBrightnessIfNeeded(for: primary)
+        precondition(service.currentSoftwareBrightness(for: primary.displayID) == 0.4)
+        DDCService.shared.completeRead()
+        try? await Task.sleep(for: .milliseconds(50))
+        precondition(service.currentSoftwareBrightness(for: primary.displayID) == nil)
+        precondition(defaults.object(forKey: softwareKey) == nil, "Late DDC read must remove restored fallback dimming")
+        print("PASS: DDC detection clears saved fallback dimming in either startup order")
+        service.invalidateDDCState(for: primary.displayID)
+        await service.refreshBrightness(for: primary)
+        DDCService.shared.completeRead(nil)
+        try? await Task.sleep(for: .milliseconds(50))
+        precondition(service.isDDCAvailable(for: primary.displayID) == false)
+        let writesBeforeRecovery = DDCService.shared.writes.count
+        service.setBrightnessImmediately(100, for: primary)
+        try? await Task.sleep(for: .milliseconds(50))
+        precondition(DDCService.shared.writes.count == writesBeforeRecovery + 1)
+        precondition(DDCService.shared.writes.last == 100)
+        precondition(service.isDDCAvailable(for: primary.displayID) == true)
+        precondition(service.currentSoftwareBrightness(for: primary.displayID) == 1)
+        print("PASS: brightness recovers hardware control after a failed DDC read")
         primary.brightness = 50
         service.setBrightnessImmediately(50, for: primary)
+        let before = DDCService.shared.writes.count
         for _ in 0..<4 { BrightnessKeyService.shared.perform(.primaryUp) }
         precondition(primary.brightness == 75, "Key repeats must accumulate from the target, not in-flight animation")
-        let before = DDCService.shared.writes.count
+        precondition(DDCService.shared.writes.count > before, "Key changes must write hardware immediately")
         trackMenu(for: 0.28)
-        precondition(DDCService.shared.writes.count > before, "Animation stalled during menu tracking")
-        precondition(primary.brightness == 75, "Animation frames must not move the published target backwards")
+        precondition(primary.brightness == 75, "Menu tracking must not move the published target backwards")
 
         // Exercise the real event decoder/callback without posting global keyboard input.
         let event = CGEvent(keyboardEventSource: nil, virtualKey: 113, keyDown: true)!

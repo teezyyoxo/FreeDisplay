@@ -253,10 +253,16 @@ final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
         }
 
         // 1. Configured shortcuts override pointer-based routing.
-        if let match = Self.shortcutTable.first(where: { $0.code == key.code && $0.modifiers == key.modifiers }) {
+        let shift = CGEventFlags.maskShift.rawValue
+        let exactMatch = Self.shortcutTable.first { $0.code == key.code && $0.modifiers == key.modifiers }
+        let preciseMatch = key.modifiers & shift != 0 ? Self.shortcutTable.first {
+            $0.code == key.code && $0.modifiers == (key.modifiers & ~shift)
+        } : nil
+        if let match = exactMatch ?? preciseMatch {
             if key.isDown {
                 let action = match.action
-                Task { @MainActor in self.perform(action) }
+                let precise = exactMatch == nil && preciseMatch != nil
+                Task { @MainActor in self.perform(action, precise: precise) }
             }
             return nil
         }
@@ -264,7 +270,7 @@ final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
         // 2. Plain brightness keys follow the pointer.
         guard Self.pointerRoutingEnabled,
               ShortcutKey.isBrightness(key.code),
-              key.modifiers == 0 else { return passThrough }
+              key.modifiers == 0 || key.modifiers == shift else { return passThrough }
 
         let pointer = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }),
@@ -284,32 +290,33 @@ final class BrightnessKeyService: ObservableObject, @unchecked Sendable {
         // Swallow both edges so macOS never sees half of a key press.
         guard key.isDown else { return nil }
         let direction = key.code == ShortcutKey.brightnessUp ? 1.0 : -1.0
+        let precise = key.modifiers == shift
         Task { @MainActor in
             self.lastKeyEventDisplayName = screenName
-            self.adjustDisplayUnderPointer(displayID: displayID, direction: direction)
+            self.adjustDisplayUnderPointer(displayID: displayID, direction: direction, precise: precise)
         }
         return nil
     }
 
     // MARK: - Actions
 
-    private func adjustDisplayUnderPointer(displayID: CGDirectDisplayID, direction: Double) {
+    private func adjustDisplayUnderPointer(displayID: CGDirectDisplayID, direction: Double, precise: Bool) {
         guard let display = DisplayManagerAccessor.shared.displays.first(where: { $0.displayID == displayID }) else {
             lastActionDescription = "No display matched the pointer"
             return
         }
         lastActionDescription = "\(direction > 0 ? "Increased" : "Decreased") \(display.name)"
         Self.log.info("Pointer routed to \(display.name, privacy: .public)")
-        adjust([display], by: SettingsService.shared.brightnessKeyStep * direction)
+        adjust([display], by: (precise ? 1 : SettingsService.shared.brightnessKeyStep) * direction)
     }
 
-    func perform(_ action: BrightnessShortcutAction) {
+    func perform(_ action: BrightnessShortcutAction, precise: Bool = false) {
         let displays = DisplayManagerAccessor.shared.displays.filter {
             $0.isOnline && !VirtualDisplayService.shared.isVirtualDisplay($0.displayID)
         }
         guard let primary = displays.first(where: { $0.isMain }) ?? displays.first else { return }
         let secondary = displays.filter { $0.displayID != primary.displayID }
-        let step = SettingsService.shared.brightnessKeyStep
+        let step = precise ? 1 : SettingsService.shared.brightnessKeyStep
         let targets: [DisplayInfo]
 
         switch action {

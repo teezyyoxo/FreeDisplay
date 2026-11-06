@@ -180,7 +180,7 @@ private struct BrightnessKeysSettingsPage: View {
             } header: {
                 Text("Brightness Keys")
             } footer: {
-                Text("The brightness keys change whichever display the mouse pointer is on. The increment applies through 100%; HDR uses three steps at 110%, 120%, and 130%. Use Shortcuts to target a specific display instead.")
+                Text("Brightness keys follow the pointer. Hold Shift for 1% adjustments through 100%, including with display shortcuts. HDR uses three steps at 110%, 120%, and 130%.")
             }
 
             Section {
