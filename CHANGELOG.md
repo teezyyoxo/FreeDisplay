@@ -4,7 +4,7 @@ All notable changes to FreeDisplay are documented here.
 
 ---
 
-## v1.1.1a (2026-11-06)
+## v1.1.1 (2026-11-06)
 
 - Extend external displays' low-brightness range with software dimming below 20%, retaining a small visibility floor and restoring the chosen level after reconnect.
 - Hold Shift with brightness keys or display shortcuts for 1% steps through 100%; explicitly configured shortcuts take precedence.
